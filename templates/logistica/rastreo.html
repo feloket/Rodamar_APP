@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Rastreo de Carga - RODAMAR{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center my-4">
+  <div class="col-md-8">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body p-4 text-center">
+        <h3 class="fw-bold">Consulta de Trazabilidad Vehicular</h3>
+        <p class="text-muted">Ingrese el VIN / Número de Chasis para consultar el estado de faena.</p>
+        <form method="GET" class="d-flex gap-2 justify-content-center">
+          <input type="text" name="chasis" value="{{ query }}" class="form-control form-control-lg text-uppercase" placeholder="Ej: CHASIS123456" required style="max-width: 400px;">
+          <button type="submit" class="btn btn-primary btn-lg px-4">Consultar</button>
+        </form>
+      </div>
+    </div>
+
+    {% if mensaje_error %}
+      <div class="alert alert-warning text-center">{{ mensaje_error }}</div>
+    {% endif %}
+
+    {% if vehiculo %}
+      <div class="card shadow border-0 rounded-4">
+        <div class="card-header bg-dark text-white p-3">
+          <h5 class="mb-0 fw-bold">VIN: {{ vehiculo.chasis }} - {{ vehiculo.marca }} {{ vehiculo.modelo }}</h5>
+        </div>
+        <div class="card-body p-4">
+          <div class="row mb-4 text-center">
+            <div class="col-3">
+              <span class="badge {% if vehiculo.estado == 'ENCONTRADO' or vehiculo.estado == 'EN_PROCESO' or vehiculo.estado == 'EN_CAMINO' or vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">1. Descargado</span>
+            </div>
+            <div class="col-3">
+              <span class="badge {% if vehiculo.estado == 'EN_PROCESO' or vehiculo.estado == 'EN_CAMINO' or vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">2. En Inspección</span>
+            </div>
+            <div class="col-3">
+              <span class="badge {% if vehiculo.estado == 'EN_CAMINO' or vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">3. En Traslado</span>
+            </div>
+            <div class="col-3">
+              <span class="badge {% if vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">4. Entregado</span>
+            </div>
+          </div>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item"><strong>Buque:</strong> {{ vehiculo.buque.nombre }} (Viaje: {{ vehiculo.buque.numero_viaje }})</li>
+            <li class="list-group-item"><strong>Fecha de Atraque:</strong> {{ vehiculo.buque.fecha_atraque }}</li>
+            <li class="list-group-item"><strong>Consignatario:</strong> {{ vehiculo.cliente.nombre_completo }} ({{ vehiculo.cliente.rut_o_id }})</li>
+            {% if vehiculo.camion_ciguena %}
+              <li class="list-group-item"><strong>Camión Cigüeña:</strong> {{ vehiculo.camion_ciguena.patente }} - {{ vehiculo.camion_ciguena.empresa_transporte }}</li>
+            {% endif %}
+            <li class="list-group-item"><strong>Ubicación en Patio:</strong> <span class="badge bg-light text-dark border">{{ vehiculo.ubicacion_patio|default:"Sin asignar" }}</span></li>
+            <li class="list-group-item"><strong>Estado Actual:</strong> <span class="badge bg-primary">{{ vehiculo.get_estado_display }}</span></li>
+          </ul>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}Inicio - Portal de Muellaje RODAMAR{% endblock %}
+
+{% block content %}
+<div class="p-5 my-4 bg-white rounded-4 shadow-sm border text-center">
+  <div class="container-fluid py-4">
+    <h1 class="display-5 fw-bold text-dark mb-3">Portal de Muellaje Portuario</h1>
+    <p class="fs-5 text-muted col-md-8 mx-auto mb-4">
+      Control de descarga de buques, manifiestos de vehículos, asignación de patios y seguimiento en tiempo real.
+    </p>
+    
+    <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
+      <a href="{% url 'rastreo' %}" class="btn btn-outline-primary btn-lg px-4 shadow-sm">
+        Consultar Vehículo por Chasis
+      </a>
+      <a href="http://sgp.epi.cl/docs/plnnn.html?_ga=2.132468301.2106468306.1668687591-23637256.1662555908&_gl=1*am6yvr*_ga*MjM2MzcyNTYuMTY2MjU1NTkwOA..*_ga_FXRZMJ51NF*MTY2ODY5MzQ3My4yMi4xLjE2Njg2OTQwNzQuMC4wLjA" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-lg px-4 shadow-sm fw-bold">
+        Planificación Naviera
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

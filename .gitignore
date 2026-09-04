@@ -1,0 +1,30 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Base de datos local
+db.sqlite3
+
+# Variables de entorno / secretos
+.env
+*.env
+
+# Media (archivos subidos por usuarios — cuando lleguemos a Documentos)
+media/
+
+# Logs
+*.log
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
