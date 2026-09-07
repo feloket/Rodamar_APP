@@ -1,4 +1,5 @@
-{% extends 'base.html' %}   ## (Acceso operadores)
+{% extends 'base.html' %}
+{# Acceso operadores #}
 
 {% block title %}Acceso Operadores - RODAMAR{% endblock %}
 
@@ -28,7 +29,8 @@
         </form>
       </div>
       <div class="card-footer text-center bg-light py-3 border-0 rounded-bottom-4">
-        <a href="{% url 'rastreo' %}" class="text-decoration-none small text-muted">¿Eres cliente? Consulta tu vehículo aquí</a>
+        <a href="{% url 'rastreo' %}" class="text-decoration-none small text-muted d-block mb-2">¿Eres cliente? Consulta tu vehículo aquí</a>
+        <a href="{% url 'registro' %}" class="text-decoration-none small text-muted">¿No tienes cuenta? Regístrate</a>
       </div>
     </div>
   </div>

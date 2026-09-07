@@ -1,12 +1,26 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-rodamar-clave-segura-puerto'
+# Carga las variables definidas en el archivo .env (no se sube a git)
+load_dotenv(BASE_DIR / '.env')
 
-DEBUG = True
+# La SECRET_KEY se lee desde el entorno. Si no existe (por ejemplo, alguien
+# clonó el repo y no creó su .env), Django avisa altiro en vez de arrancar
+# con una clave vacía o insegura.
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError(
+        "Falta SECRET_KEY. Crea un archivo .env en la raíz del proyecto "
+        "(mira .env.example) con SECRET_KEY=tu_clave_generada."
+    )
 
-ALLOWED_HOSTS = []
+# DEBUG también sale del entorno, por defecto en False (modo producción)
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
 
 # Aplicaciones del proyecto
 INSTALLED_APPS = [
@@ -19,6 +33,7 @@ INSTALLED_APPS = [
     # Tus Apps
     'pages',
     'logistica',
+    'usuarios',
 ]
 
 MIDDLEWARE = [

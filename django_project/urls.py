@@ -11,6 +11,9 @@ urlpatterns = [
     
     # Rutas del sistema portuario y logística
     path('logistica/', include('logistica.urls')),
+
+    # Registro de usuarios (rol USUARIO)
+    path('usuarios/', include('usuarios.urls')),
     
     # Autenticación (Login y Logout)
     path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
