@@ -1,0 +1,22 @@
+{# Tabla de historial de auditoría. Uso: {% include 'includes/historial.html' with registros=historial %} #}
+<div class="table-responsive">
+  <table class="table table-sm align-middle mb-0">
+    <thead>
+      <tr><th>Fecha</th><th>Acción</th><th>Campo</th><th>Antes</th><th>Después</th><th>Realizado por</th></tr>
+    </thead>
+    <tbody>
+      {% for r in registros %}
+        <tr>
+          <td class="small">{{ r.fecha|date:"d-m-Y H:i" }}</td>
+          <td class="small">{{ r.get_accion_display }}</td>
+          <td class="small">{{ r.campo|default:"—" }}</td>
+          <td class="small text-body-secondary ajustable">{{ r.valor_anterior|default:"—" }}</td>
+          <td class="small ajustable">{{ r.valor_nuevo|default:"—" }}</td>
+          <td class="small">{% if r.actor %}{{ r.actor.username }}{% else %}Sistema{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-center text-body-secondary py-3">Sin registros todavía.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

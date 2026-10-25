@@ -4,54 +4,94 @@
 
 {% block content %}
 <div class="row justify-content-center my-4">
-  <div class="col-md-8">
+  <div class="col-lg-9">
     <div class="card shadow-sm border-0 mb-4">
       <div class="card-body p-4 text-center">
-        <h3 class="fw-bold">Consulta de Trazabilidad Vehicular</h3>
-        <p class="text-muted">Ingrese el VIN / Número de Chasis para consultar el estado de faena.</p>
+        <h1 class="h3 fw-bold">Consulta de Trazabilidad Vehicular</h1>
+        <p class="text-body-secondary">Ingrese el VIN / Número de Chasis para consultar el estado de faena.</p>
         <form method="GET" class="d-flex gap-2 justify-content-center">
-          <input type="text" name="chasis" value="{{ query }}" class="form-control form-control-lg text-uppercase" placeholder="Ej: CHASIS123456" required style="max-width: 400px;">
+          <label for="chasis" class="visually-hidden">Número de chasis</label>
+          <input type="text" id="chasis" name="chasis" value="{{ query }}" maxlength="50" class="form-control form-control-lg text-uppercase" placeholder="Ej: CHASIS123456" required style="max-width: 25rem;">
           <button type="submit" class="btn btn-primary btn-lg px-4">Consultar</button>
         </form>
       </div>
     </div>
 
     {% if mensaje_error %}
-      <div class="alert alert-warning text-center">{{ mensaje_error }}</div>
+      <div class="alert alert-warning text-center" role="alert">{{ mensaje_error }}</div>
     {% endif %}
 
     {% if vehiculo %}
       <div class="card shadow border-0 rounded-4">
         <div class="card-header bg-dark text-white p-3">
-          <h5 class="mb-0 fw-bold">VIN: {{ vehiculo.chasis }} - {{ vehiculo.marca }} {{ vehiculo.modelo }}</h5>
+          <h2 class="h5 mb-0 fw-bold">VIN: {{ vehiculo.chasis }} - {{ vehiculo.marca }} {{ vehiculo.modelo }}</h2>
         </div>
         <div class="card-body p-4">
-          <div class="row mb-4 text-center">
-            <div class="col-3">
-              <span class="badge {% if vehiculo.estado == 'ENCONTRADO' or vehiculo.estado == 'EN_PROCESO' or vehiculo.estado == 'EN_CAMINO' or vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">1. Descargado</span>
+          <!-- Progreso del estado (público) -->
+          <div class="row g-2 mb-4 text-center">
+            <div class="col-6 col-md-3">
+              <span class="badge bg-success w-100 py-2">1. Descargado</span>
             </div>
-            <div class="col-3">
+            <div class="col-6 col-md-3">
               <span class="badge {% if vehiculo.estado == 'EN_PROCESO' or vehiculo.estado == 'EN_CAMINO' or vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">2. En Inspección</span>
             </div>
-            <div class="col-3">
+            <div class="col-6 col-md-3">
               <span class="badge {% if vehiculo.estado == 'EN_CAMINO' or vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">3. En Traslado</span>
             </div>
-            <div class="col-3">
+            <div class="col-6 col-md-3">
               <span class="badge {% if vehiculo.estado == 'ENTREGADO' %}bg-success{% else %}bg-secondary{% endif %} w-100 py-2">4. Entregado</span>
             </div>
           </div>
+
           <ul class="list-group list-group-flush">
-            <li class="list-group-item"><strong>Buque:</strong> {{ vehiculo.buque.nombre }} (Viaje: {{ vehiculo.buque.numero_viaje }})</li>
-            <li class="list-group-item"><strong>Fecha de Atraque:</strong> {{ vehiculo.buque.fecha_atraque }}</li>
-            <li class="list-group-item"><strong>Consignatario:</strong> {{ vehiculo.cliente.nombre_completo }} ({{ vehiculo.cliente.rut_o_id }})</li>
-            {% if vehiculo.camion_ciguena %}
-              <li class="list-group-item"><strong>Camión Cigüeña:</strong> {{ vehiculo.camion_ciguena.patente }} - {{ vehiculo.camion_ciguena.empresa_transporte }}</li>
-            {% endif %}
-            <li class="list-group-item"><strong>Ubicación en Patio:</strong> <span class="badge bg-light text-dark border">{{ vehiculo.ubicacion_patio|default:"Sin asignar" }}</span></li>
             <li class="list-group-item"><strong>Estado Actual:</strong> <span class="badge bg-primary">{{ vehiculo.get_estado_display }}</span></li>
+            <li class="list-group-item"><strong>Ubicación en Patio:</strong> <span class="badge bg-light text-dark border">{{ vehiculo.ubicacion_patio|default:"Sin asignar" }}</span></li>
+
+            {% if detalle %}
+              {# Datos comerciales: solo para el dueño (cliente de la empresa) o personal #}
+              <li class="list-group-item"><strong>Buque:</strong> {{ vehiculo.buque.nombre }} (Viaje: {{ vehiculo.buque.numero_viaje }})</li>
+              <li class="list-group-item"><strong>Fecha de Atraque:</strong> {{ vehiculo.buque.fecha_atraque|date:"d-m-Y" }}</li>
+              <li class="list-group-item"><strong>Consignatario:</strong> {{ vehiculo.cliente.nombre_completo }} ({{ vehiculo.cliente.rut_o_id }})</li>
+              {% if vehiculo.camion_ciguena %}
+                <li class="list-group-item"><strong>Camión Cigüeña:</strong> {{ vehiculo.camion_ciguena.patente }} - {{ vehiculo.camion_ciguena.empresa_transporte }}</li>
+              {% endif %}
+            {% endif %}
           </ul>
+
+          {% if not detalle %}
+            <p class="small text-body-secondary mt-3 mb-0">
+              🔒 Los datos del consignatario, buque e historial solo los ve la empresa dueña del vehículo.
+              {% if not user.is_authenticated %}<a href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Inicia sesión</a> para verlos.{% endif %}
+            </p>
+          {% endif %}
         </div>
       </div>
+
+      {% if detalle %}
+        <div class="card shadow-sm border-0 rounded-4 mt-4">
+          <div class="card-header py-3"><h2 class="h6 fw-bold mb-0">🕓 Historial de estados <small class="text-body-secondary fw-normal">(más reciente primero)</small></h2></div>
+          <ul class="list-group list-group-flush">
+            {% for h in historial %}
+              <li class="list-group-item d-flex flex-wrap justify-content-between gap-2">
+                <div class="me-auto">
+                  <div class="fw-bold">{{ h.get_estado_nuevo_display }}</div>
+                  <small class="text-body-secondary">
+                    {% if h.estado_anterior and h.estado_anterior != h.estado_nuevo %}Antes: {{ h.get_estado_anterior_display }} · {% endif %}
+                    Patio: {{ h.ubicacion_nueva|default:"Sin asignar" }}{% if h.ubicacion_anterior != h.ubicacion_nueva and h.ubicacion_anterior %} (antes {{ h.ubicacion_anterior }}){% endif %}
+                    {% if h.nota %} · {{ h.nota }}{% endif %}
+                  </small>
+                </div>
+                <div class="text-end small">
+                  <div>{{ h.fecha|date:"d-m-Y H:i" }}</div>
+                  {% if es_personal %}<div class="text-body-secondary">por {{ h.usuario_texto|default:"—" }}</div>{% endif %}
+                </div>
+              </li>
+            {% empty %}
+              <li class="list-group-item text-body-secondary">Sin movimientos registrados.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
     {% endif %}
   </div>
 </div>

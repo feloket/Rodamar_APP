@@ -4,23 +4,16 @@
 
 {% block content %}
 <div class="container-fluid py-2">
-  {% if messages %}
-    {% for message in messages %}
-      <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>
-    {% endfor %}
-  {% endif %}
+  {# Los mensajes ahora se muestran en base.html para todas las páginas #}
 
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div>
-      <h2 class="fw-bold text-dark mb-0">Panel de Operaciones</h2>
-      <p class="text-muted mb-0">Gestión de descarga, manifiestos y flujo de patio.</p>
+      <h2 class="fw-bold text-body-emphasis mb-0">Panel de Operaciones</h2>
+      <p class="text-body-secondary mb-0">Gestión de descarga, manifiestos y flujo de patio.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
       <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalNuevoBuque">🚢 + Nuevo Buque</button>
-      <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">👤 + Nuevo Cliente</button>
+      <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">🏢 + Nueva Empresa</button>
       <button class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#modalNuevoCamion">🚛 + Nueva Cigüeña</button>
       <button class="btn btn-primary shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalNuevoVehiculo">🚗 + Registrar Vehículo</button>
     </div>
@@ -28,7 +21,7 @@
 
   <!-- Métricas -->
   <div class="row g-3 mb-4">
-    <div class="col-md-2 col-6"><div class="card shadow-sm border-0 border-start border-4 border-dark h-100 p-3"><span class="text-muted small fw-bold">TOTAL</span><h3 class="fw-bold my-1">{{ total }}</h3></div></div>
+    <div class="col-md-2 col-6"><div class="card shadow-sm border-0 border-start border-4 border-dark h-100 p-3"><span class="text-body-secondary small fw-bold">TOTAL</span><h3 class="fw-bold my-1">{{ total }}</h3></div></div>
     <div class="col-md-2 col-6"><div class="card shadow-sm border-0 border-start border-4 border-info h-100 p-3"><span class="text-info small fw-bold">ENCONTRADOS</span><h3 class="fw-bold my-1">{{ encontrados }}</h3></div></div>
     <div class="col-md-3 col-6"><div class="card shadow-sm border-0 border-start border-4 border-warning h-100 p-3"><span class="text-warning small fw-bold">EN INSPECCIÓN</span><h3 class="fw-bold my-1">{{ en_proceso }}</h3></div></div>
     <div class="col-md-2 col-6"><div class="card shadow-sm border-0 border-start border-4 border-primary h-100 p-3"><span class="text-primary small fw-bold">EN TRASLADO</span><h3 class="fw-bold my-1">{{ en_camino }}</h3></div></div>
@@ -72,8 +65,8 @@
         <tbody>
           {% for v in vehiculos %}
           <tr>
-            <td class="fw-bold text-primary">{{ v.chasis }}</td>
-            <td>{{ v.marca }} {{ v.modelo }} <small class="text-muted d-block">{{ v.color }}</small></td>
+            <td class="fw-bold"><a href="{% url 'rastreo' %}?chasis={{ v.chasis|urlencode }}" title="Ver historial">{{ v.chasis }}</a></td>
+            <td class="ajustable">{{ v.marca }} {{ v.modelo }} <small class="text-body-secondary d-block">{{ v.color|default_if_none:"" }}</small></td>
             <td>{{ v.buque.nombre }}</td>
             <td>{{ v.cliente.nombre_completo }}</td>
             <td>{{ v.camion_ciguena.patente|default:"-" }}</td>
@@ -91,18 +84,19 @@
             <td>
               <form action="{% url 'actualizar_estado' v.pk %}" method="POST" class="d-flex gap-1">
                 {% csrf_token %}
-                <select name="nuevo_estado" class="form-select form-select-sm" style="max-width: 140px;">
+                <select name="nuevo_estado" class="form-select form-select-sm" style="max-width: 9rem;">
                   {% for key, label in estados %}
                     <option value="{{ key }}" {% if v.estado == key %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
                 </select>
-                <input type="text" name="ubicacion_patio" value="{{ v.ubicacion_patio|default:'' }}" class="form-control form-control-sm" placeholder="Patio" style="max-width: 80px;">
-                <button type="submit" class="btn btn-sm btn-outline-success">💾</button>
+                <input type="text" name="ubicacion_patio" value="{{ v.ubicacion_patio|default:'' }}" class="form-control form-control-sm" placeholder="Patio" style="max-width: 6rem;">
+                <button type="submit" class="btn btn-sm btn-outline-success" title="Guardar estado">💾</button>
+                <a href="{% url 'vehiculo_editar' v.pk %}" class="btn btn-sm btn-outline-secondary" title="Editar vehículo">✏️</a>
               </form>
             </td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" class="text-center py-4 text-muted">No se encontraron vehículos registrados.</td></tr>
+          <tr><td colspan="8" class="text-center py-4 text-body-secondary">No se encontraron vehículos registrados.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -122,7 +116,7 @@
           <div class="col-md-6"><label class="form-label fw-bold">Número de Viaje*</label>{{ form_buque.numero_viaje }}</div>
           <div class="col-md-6"><label class="form-label fw-bold">Fecha de Atraque*</label>{{ form_buque.fecha_atraque }}</div>
         </div>
-        <div class="modal-footer bg-light"><button type="submit" class="btn btn-primary px-4">Guardar Buque</button></div>
+        <div class="modal-footer bg-body-tertiary"><button type="submit" class="btn btn-primary px-4">Guardar Buque</button></div>
       </form>
     </div>
   </div>
@@ -132,7 +126,7 @@
 <div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header bg-dark text-white"><h5 class="modal-title">👤 Registrar Nuevo Cliente</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+      <div class="modal-header bg-dark text-white"><h5 class="modal-title">🏢 Registrar Empresa Cliente</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
       <form action="{% url 'registrar_cliente' %}" method="POST">
         {% csrf_token %}
         <div class="modal-body row g-3">
@@ -141,7 +135,7 @@
           <div class="col-md-6"><label class="form-label">Teléfono</label>{{ form_cliente.telefono }}</div>
           <div class="col-md-6"><label class="form-label">Email</label>{{ form_cliente.email }}</div>
         </div>
-        <div class="modal-footer bg-light"><button type="submit" class="btn btn-primary px-4">Guardar Cliente</button></div>
+        <div class="modal-footer bg-body-tertiary"><button type="submit" class="btn btn-primary px-4">Guardar Empresa</button></div>
       </form>
     </div>
   </div>
@@ -160,7 +154,7 @@
           <div class="col-md-6"><label class="form-label">Nombre Chofer</label>{{ form_camion.nombre_chofer }}</div>
           <div class="col-md-6"><label class="form-label">RUT Chofer</label>{{ form_camion.rut_chofer }}</div>
         </div>
-        <div class="modal-footer bg-light"><button type="submit" class="btn btn-primary px-4">Guardar Camión</button></div>
+        <div class="modal-footer bg-body-tertiary"><button type="submit" class="btn btn-primary px-4">Guardar Camión</button></div>
       </form>
     </div>
   </div>
@@ -179,12 +173,12 @@
           <div class="col-md-3"><label class="form-label fw-bold">Modelo*</label>{{ form.modelo }}</div>
           <div class="col-md-4"><label class="form-label">Color</label>{{ form.color }}</div>
           <div class="col-md-4"><label class="form-label fw-bold">Buque*</label>{{ form.buque }}</div>
-          <div class="col-md-4"><label class="form-label fw-bold">Cliente*</label>{{ form.cliente }}</div>
+          <div class="col-md-4"><label class="form-label fw-bold">Empresa cliente*</label>{{ form.cliente }}</div>
           <div class="col-md-6"><label class="form-label">Camión Cigüeña (Opcional)</label>{{ form.camion_ciguena }}</div>
           <div class="col-md-6"><label class="form-label fw-bold">Estado Inicial</label>{{ form.estado }}</div>
           <div class="col-12"><label class="form-label">Ubicación en Patio</label>{{ form.ubicacion_patio }}</div>
         </div>
-        <div class="modal-footer bg-light"><button type="submit" class="btn btn-primary px-4">Guardar Vehículo</button></div>
+        <div class="modal-footer bg-body-tertiary"><button type="submit" class="btn btn-primary px-4">Guardar Vehículo</button></div>
       </form>
     </div>
   </div>

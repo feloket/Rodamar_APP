@@ -4,41 +4,40 @@
 
 {% block content %}
 <div class="row justify-content-center my-5">
-  <div class="col-md-5 col-lg-4">
+  <div class="col-md-7 col-lg-6 col-xl-5">
     <div class="card shadow border-0 rounded-4">
       <div class="card-header bg-dark text-white text-center py-4 rounded-top-4">
-        <h4 class="fw-bold mb-0">🚢 Crear Cuenta</h4>
-        <small class="text-light">Personal de Muelle y Logística</small>
+        <h4 class="fw-bold mb-0">🚢 Crear Cuenta de Cliente</h4>
+        <small class="text-light">Consulta el estado de los vehículos de tu empresa</small>
       </div>
       <div class="card-body p-4">
-        {% if form.errors %}
-          <div class="alert alert-danger py-2 small">
-            Revisa los datos: {{ form.errors|join:" " }}
-          </div>
-        {% endif %}
-        <form method="POST">
+        <div class="alert alert-info py-2 small">
+          Tu cuenta quedará como <strong>cliente</strong>. Un empleado de RODAMAR la vinculará a tu empresa
+          para que puedas ver tus vehículos. ¿Eres empleado? Pide tu cuenta a un administrador.
+        </div>
+        {% for error in form.non_field_errors %}
+          <div class="alert alert-danger py-2 small">{{ error }}</div>
+        {% endfor %}
+
+        <form method="POST" novalidate>
           {% csrf_token %}
-          <div class="mb-3">
-            <label class="form-label fw-bold small">Usuario</label>
-            {{ form.username }}
+          <input type="hidden" name="next" value="{{ next }}">
+
+          {% include 'includes/campo.html' with campo=form.username %}
+          <div class="row">
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.first_name %}</div>
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.last_name %}</div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold small">Correo</label>
-            {{ form.email }}
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-bold small">Contraseña</label>
-            {{ form.password1 }}
-          </div>
-          <div class="mb-4">
-            <label class="form-label fw-bold small">Repetir contraseña</label>
-            {{ form.password2 }}
-          </div>
-          <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm">Crear cuenta</button>
+          {% include 'includes/campo.html' with campo=form.email %}
+          {% include 'includes/campo.html' with campo=form.telefono %}
+          {% include 'includes/campo.html' with campo=form.password1 ayuda=True %}
+          {% include 'includes/campo.html' with campo=form.password2 %}
+
+          <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold shadow-sm mt-2">Crear cuenta</button>
         </form>
       </div>
-      <div class="card-footer text-center bg-light py-3 border-0 rounded-bottom-4">
-        <a href="{% url 'login' %}" class="text-decoration-none small text-muted">¿Ya tienes cuenta? Inicia sesión</a>
+      <div class="card-footer text-center bg-body-tertiary py-3 border-0 rounded-bottom-4">
+        <a href="{% url 'login' %}" class="text-decoration-none small text-body-secondary">¿Ya tienes cuenta? Inicia sesión</a>
       </div>
     </div>
   </div>

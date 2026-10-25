@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Mis vehículos - RODAMAR{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h1 class="h2 fw-bold text-body-emphasis mb-0">🚗 Mis vehículos</h1>
+  <p class="text-body-secondary mb-0">{% if empresa %}{{ empresa.nombre_completo }} · {{ empresa.rut_o_id }}{% else %}Estado de los vehículos de tu empresa.{% endif %}</p>
+</div>
+
+{% if not empresa %}
+  <div class="alert alert-warning">
+    Tu cuenta todavía no está vinculada a una empresa. Un empleado de RODAMAR debe asociarla para que veas tus vehículos.
+    Mientras tanto puedes <a href="{% url 'rastreo' %}">consultar un vehículo por chasis</a>.
+  </div>
+{% else %}
+  <div class="card shadow-sm border-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr><th>Chasis (VIN)</th><th>Vehículo</th><th>Buque</th><th>Atraque</th><th>Patio</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          {% for v in vehiculos %}
+            <tr>
+              <td class="fw-bold"><a href="{% url 'rastreo' %}?chasis={{ v.chasis|urlencode }}" title="Ver historial">{{ v.chasis }}</a></td>
+              <td class="ajustable">{{ v.marca }} {{ v.modelo }} <small class="text-body-secondary d-block">{{ v.color|default_if_none:"" }}</small></td>
+              <td>{{ v.buque.nombre }}</td>
+              <td>{{ v.buque.fecha_atraque|date:"d-m-Y" }}</td>
+              <td><span class="badge bg-light text-dark border">{{ v.ubicacion_patio|default:"Sin asignar" }}</span></td>
+              <td>
+                <span class="badge {% if v.estado == 'ENTREGADO' %}bg-success{% elif v.estado == 'EN_CAMINO' %}bg-primary{% elif v.estado == 'EN_PROCESO' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">{{ v.get_estado_display }}</span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-center py-4 text-body-secondary">Tu empresa no tiene vehículos registrados todavía.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

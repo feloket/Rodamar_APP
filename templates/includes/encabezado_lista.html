@@ -1,0 +1,8 @@
+{# Título + botón "Nuevo". Uso: {% include 'includes/encabezado_lista.html' with titulo="..." subtitulo="..." url_nuevo="buque_crear" texto_nuevo="+ Nuevo buque" %} #}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+  <div>
+    <h1 class="h2 fw-bold text-body-emphasis mb-0">{{ titulo }}</h1>
+    <p class="text-body-secondary mb-0">{{ subtitulo }}</p>
+  </div>
+  <a href="{% url url_nuevo %}" class="btn btn-primary fw-bold shadow-sm">{{ texto_nuevo }}</a>
+</div>

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Editar {{ empresa.nombre_completo }} - RODAMAR{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'lista_empresas' %}">Empresas</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ empresa.nombre_completo }}</li>
+  </ol>
+</nav>
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header bg-dark text-white py-3 rounded-top-4"><h1 class="h5 fw-bold mb-0">🏢 Editar empresa</h1></div>
+      <div class="card-body p-4">
+        <form method="POST" novalidate>
+          {% csrf_token %}
+          {% include 'includes/campo.html' with campo=form.nombre_completo %}
+          {% include 'includes/campo.html' with campo=form.rut_o_id %}
+          <div class="row">
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.telefono %}</div>
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.email %}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{% url 'lista_empresas' %}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary fw-bold">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <h2 class="h6 fw-bold mb-0">👥 Cuentas de cliente vinculadas</h2>
+        <a href="{% url 'gestion_crear_usuario' %}" class="btn btn-sm btn-outline-primary">+ Crear cuenta</a>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for p in cuentas %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>{{ p.usuario.get_full_name|default:p.usuario.username }} <small class="text-body-secondary">({{ p.usuario.email|default:"sin correo" }})</small></span>
+            <a href="{% url 'gestion_editar_usuario' p.usuario.pk %}" class="btn btn-sm btn-link">Ver</a>
+          </li>
+        {% empty %}
+          <li class="list-group-item text-body-secondary">Ninguna cuenta vinculada.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,82 @@
+/* ==========================================================================
+   RODAMAR - estilos propios
+   - Modo día / noche: Bootstrap 5.3 cambia su paleta con data-bs-theme en <html>.
+   - Tamaño de texto: se escala el font-size de <html>; como Bootstrap usa
+     "rem" en todo, la página crece de forma proporcional sin romper el layout.
+   ========================================================================== */
+
+:root {
+  --rodamar-transicion: background-color .2s ease, color .2s ease, border-color .2s ease;
+}
+
+body,
+.card,
+.modal-content,
+.dropdown-menu,
+.form-control,
+.form-select {
+  transition: var(--rodamar-transicion);
+}
+
+/* Respeta a quienes prefieren menos animación */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* Enlace "Saltar al contenido" para teclado / lectores de pantalla */
+.saltar-contenido {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 2000;
+}
+.saltar-contenido:focus {
+  left: 1rem;
+  top: 1rem;
+}
+
+/* Foco siempre visible al navegar con teclado */
+:focus-visible {
+  outline: 3px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+/* Logo: altura en rem para que acompañe el tamaño de texto */
+.navbar-logo { height: 3.25rem; width: auto; }
+
+.avatar-inicial {
+  width: 2rem;
+  height: 2rem;
+  font-size: .9rem;
+}
+
+/* Controles del menú de accesibilidad */
+.acc-panel { min-width: 16rem; }
+.acc-panel .btn { min-width: 2.75rem; }
+
+/* --------------------------------------------------------------------------
+   Ajustes para modo noche: algunas clases "dark" de Bootstrap quedan
+   invisibles sobre fondo oscuro. Se re-colorean solo en modo noche.
+   -------------------------------------------------------------------------- */
+[data-bs-theme="dark"] .btn-outline-dark {
+  --bs-btn-color: var(--bs-body-color);
+  --bs-btn-border-color: var(--bs-border-color);
+  --bs-btn-hover-bg: var(--bs-secondary-bg);
+  --bs-btn-hover-color: var(--bs-emphasis-color);
+  --bs-btn-hover-border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .btn-dark {
+  --bs-btn-bg: var(--bs-secondary-bg);
+  --bs-btn-border-color: var(--bs-border-color);
+  --bs-btn-hover-bg: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .card-header.bg-dark,
+[data-bs-theme="dark"] .modal-header.bg-dark {
+  background-color: #0b1220 !important;
+}
+
+/* Tablas con mucho texto: evita que con letra grande se aplasten las columnas */
+.table td, .table th { white-space: nowrap; }
+.table td.ajustable { white-space: normal; }
