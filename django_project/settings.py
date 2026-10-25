@@ -60,6 +60,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Rol del usuario disponible en todas las plantillas (navbar)
+                'usuarios.context_processors.rol_usuario',
             ],
         },
     },
@@ -110,5 +112,50 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Rutas de autenticación
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = '/logistica/panel/'
-LOGOUT_REDIRECT_URL = '/'
+# Sin ?next= cada rol va a su inicio (ver usuarios.views.url_inicio)
+LOGIN_REDIRECT_URL = 'mis_vehiculos'
+LOGOUT_REDIRECT_URL = 'home'
+
+# Sesiones y cookies
+SESSION_COOKIE_AGE = 60 * 60 * 8          # 8 horas (una jornada) si no marca "Recordarme"
+SESSION_COOKIE_HTTPONLY = True            # JavaScript no puede leer la cookie de sesión
+CSRF_COOKIE_HTTPONLY = True
+# En producción (DEBUG=False) las cookies solo viajan por HTTPS
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Encabezados de seguridad (siempre activos, no afectan el desarrollo local)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+
+# Solo en producción (DEBUG=False): obliga HTTPS. Se pueden desactivar con
+# SECURE_SSL_REDIRECT=False en el .env si se prueba sin certificado.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '3600'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+
+# Correo. Por defecto se usa el backend de CONSOLA: los correos (ej. el de
+# recuperar contraseña) se imprimen en la terminal donde corre runserver y
+# no salen del computador. Para enviar correos reales habría que configurar
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend + EMAIL_HOST, etc.
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'usuarios.correo_consola.EmailBackend')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'RODAMAR <no-responder@rodamar.local>')
+
+# El enlace para restablecer la contraseña vence en 1 hora (por defecto Django usa 3 días)
+PASSWORD_RESET_TIMEOUT = 60 * 60
+
+# Bloqueo de login por intentos fallidos (ver usuarios/seguridad.py)
+LOGIN_MAX_INTENTOS_USUARIO = 5
+LOGIN_MAX_INTENTOS_IP = 30
+LOGIN_BLOQUEO_MINUTOS = 15
+
+# Mensajes: Django usa la etiqueta "error", pero Bootstrap usa "danger"
+from django.contrib.messages import constants as message_constants
+MESSAGE_TAGS = {message_constants.ERROR: 'danger'}
+# Al correr "python manage.py test" se usa un hash rápido para que los tests
+# no tarden minutos. NUNCA aplica al servidor normal (runserver / producción).
+import sys
+if len(sys.argv) > 1 and sys.argv[1] == 'test':
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
