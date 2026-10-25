@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Eliminar {{ titulo|lower }} - RODAMAR{% endblock %}
+{% block content %}
+<div class="row justify-content-center my-4">
+  <div class="col-md-8 col-lg-6">
+    <div class="card shadow border-danger rounded-4">
+      <div class="card-header bg-danger text-white py-3 rounded-top-4">
+        <h1 class="h5 fw-bold mb-0">⚠️ Eliminar {{ titulo|lower }}</h1>
+      </div>
+      <div class="card-body p-4">
+        <p>Vas a eliminar <strong>{{ objeto }}</strong>.</p>
+        {% if advertencia %}<div class="alert alert-warning small">{{ advertencia }}</div>{% endif %}
+        <p class="small text-body-secondary">Esta acción no se puede deshacer y queda registrada en la auditoría.</p>
+        <form method="POST" class="d-flex gap-2">
+          {% csrf_token %}
+          <a href="{% url volver %}" class="btn btn-outline-secondary w-50">Cancelar</a>
+          <button type="submit" class="btn btn-danger w-50 fw-bold">Sí, eliminar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

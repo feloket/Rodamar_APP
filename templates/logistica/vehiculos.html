@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Vehículos - RODAMAR{% endblock %}
+{% block content %}
+{% include 'includes/encabezado_lista.html' with titulo="🚗 Vehículos" subtitulo="Manifiesto completo. Haz clic en un chasis para ver su historial." url_nuevo="vehiculo_crear" texto_nuevo="+ Nuevo vehículo" %}
+
+<div class="card shadow-sm border-0 mb-4"><div class="card-body p-3">
+  <form method="GET" class="row g-2">
+    <div class="col-lg-4"><label for="q" class="visually-hidden">Buscar</label>
+      <input type="search" id="q" name="q" value="{{ q }}" class="form-control" placeholder="🔍 Chasis, marca o modelo"></div>
+    <div class="col-sm-4 col-lg-2"><label for="estado" class="visually-hidden">Estado</label>
+      <select id="estado" name="estado" class="form-select"><option value="">Todos los estados</option>
+        {% for k, label in estados %}<option value="{{ k }}" {% if filtros.estado == k %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></div>
+    <div class="col-sm-4 col-lg-2"><label for="buque" class="visually-hidden">Buque</label>
+      <select id="buque" name="buque" class="form-select"><option value="">Todos los buques</option>
+        {% for b in buques %}<option value="{{ b.pk }}" {% if filtros.buque == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.nombre }} ({{ b.numero_viaje }})</option>{% endfor %}
+      </select></div>
+    <div class="col-sm-4 col-lg-2"><label for="empresa" class="visually-hidden">Empresa</label>
+      <select id="empresa" name="empresa" class="form-select"><option value="">Todas las empresas</option>
+        {% for e in empresas %}<option value="{{ e.pk }}" {% if filtros.empresa == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.nombre_completo }}</option>{% endfor %}
+      </select></div>
+    <div class="col-lg-2 d-grid"><button class="btn btn-dark">Filtrar</button></div>
+  </form>
+</div></div>
+
+<p class="small text-body-secondary">{{ total }} vehículo(s) encontrados.</p>
+
+<div class="card shadow-sm border-0"><div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-dark"><tr><th>Chasis (VIN)</th><th>Vehículo</th><th>Buque</th><th>Empresa</th><th>Cigüeña</th><th>Patio</th><th>Estado</th><th class="text-end">Acciones</th></tr></thead>
+    <tbody>
+      {% for v in pagina %}
+        <tr>
+          <td class="fw-bold"><a href="{% url 'rastreo' %}?chasis={{ v.chasis|urlencode }}" title="Ver historial">{{ v.chasis }}</a></td>
+          <td class="ajustable">{{ v.marca }} {{ v.modelo }} <small class="text-body-secondary d-block">{{ v.color|default_if_none:"" }}</small></td>
+          <td>{{ v.buque.nombre }}</td>
+          <td class="ajustable">{{ v.cliente.nombre_completo }}</td>
+          <td>{{ v.camion_ciguena.patente|default:"—" }}</td>
+          <td><span class="badge bg-light text-dark border">{{ v.ubicacion_patio|default:"Sin asignar" }}</span></td>
+          <td><span class="badge {% if v.estado == 'ENTREGADO' %}bg-success{% elif v.estado == 'EN_CAMINO' %}bg-primary{% elif v.estado == 'EN_PROCESO' %}bg-warning text-dark{% else %}bg-info text-dark{% endif %}">{{ v.get_estado_display }}</span></td>
+          <td class="text-end">
+            <a href="{% url 'vehiculo_editar' v.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
+            {% if es_admin %}<a href="{% url 'vehiculo_eliminar' v.pk %}" class="btn btn-sm btn-outline-danger">Eliminar</a>{% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="text-center py-4 text-body-secondary">No se encontraron vehículos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% include 'includes/paginacion.html' %}
+{% endblock %}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.contrib.auth import views as auth_views
+from usuarios.views import IniciarSesionView, CerrarSesionView
 
 urlpatterns = [
     # Panel técnico de Django
@@ -16,6 +16,7 @@ urlpatterns = [
     path('usuarios/', include('usuarios.urls')),
     
     # Autenticación (Login y Logout)
-    path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+    # (vistas personalizadas en usuarios/views.py: "Recordarme", mensajes, etc.)
+    path('login/', IniciarSesionView.as_view(), name='login'),
+    path('logout/', CerrarSesionView.as_view(), name='logout'),
 ]

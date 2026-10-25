@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Buques - RODAMAR{% endblock %}
+{% block content %}
+{% include 'includes/encabezado_lista.html' with titulo="🚢 Buques" subtitulo="Naves que arriban al puerto y su avance de descarga." url_nuevo="buque_crear" texto_nuevo="+ Nuevo buque" %}
+
+<div class="card shadow-sm border-0 mb-4"><div class="card-body p-3">
+  <form method="GET" class="row g-2">
+    <div class="col-md-10"><label for="q" class="visually-hidden">Buscar</label>
+      <input type="search" id="q" name="q" value="{{ q }}" class="form-control" placeholder="🔍 Buscar por nombre o número de viaje"></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-dark">Buscar</button></div>
+  </form>
+</div></div>
+
+<div class="card shadow-sm border-0"><div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-dark"><tr><th>Nave</th><th>Viaje</th><th>Atraque</th><th>Vehículos</th><th>Pendientes</th><th class="text-end">Acciones</th></tr></thead>
+    <tbody>
+      {% for b in pagina %}
+        <tr>
+          <td class="fw-bold">{{ b.nombre }}</td>
+          <td>{{ b.numero_viaje }}</td>
+          <td>{{ b.fecha_atraque|date:"d-m-Y" }}</td>
+          <td><a href="{% url 'vehiculos_lista' %}?buque={{ b.pk }}">{{ b.total }}</a></td>
+          <td>{% if b.pendientes %}<span class="badge text-bg-warning">{{ b.pendientes }} por entregar</span>{% elif b.total %}<span class="badge text-bg-success">Completo</span>{% else %}—{% endif %}</td>
+          <td class="text-end">
+            <a href="{% url 'buque_editar' b.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
+            {% if es_admin %}<a href="{% url 'buque_eliminar' b.pk %}" class="btn btn-sm btn-outline-danger">Eliminar</a>{% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="text-center py-4 text-body-secondary">No hay buques registrados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% include 'includes/paginacion.html' %}
+{% endblock %}

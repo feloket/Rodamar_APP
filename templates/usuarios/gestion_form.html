@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}{% if creando %}Nueva cuenta{% else %}Editar {{ objetivo.username }}{% endif %} - RODAMAR{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'gestion_usuarios' %}">{% if es_admin %}Usuarios{% else %}Cuentas cliente{% endif %}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if creando %}Nueva cuenta{% else %}{{ objetivo.username }}{% endif %}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <div class="{% if creando %}col-lg-7 mx-auto{% else %}col-lg-6{% endif %}">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header bg-dark text-white py-3 rounded-top-4">
+        <h1 class="h5 fw-bold mb-0">{% if creando %}➕ Nueva cuenta{% else %}✏️ Editar cuenta: {{ objetivo.username }}{% endif %}</h1>
+      </div>
+      <div class="card-body p-4">
+        {% if not es_admin %}
+          <div class="alert alert-info py-2 small">Como empleado solo puedes crear y editar cuentas de <strong>cliente</strong>.</div>
+        {% endif %}
+        {% for error in form.non_field_errors %}<div class="alert alert-danger py-2 small">{{ error }}</div>{% endfor %}
+
+        <form method="POST" novalidate>
+          {% csrf_token %}
+          {% if creando %}{% include 'includes/campo.html' with campo=form.username %}{% endif %}
+          <div class="row">
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.first_name %}</div>
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.last_name %}</div>
+          </div>
+          <div class="row">
+            <div class="col-sm-7">{% include 'includes/campo.html' with campo=form.email %}</div>
+            <div class="col-sm-5">{% include 'includes/campo.html' with campo=form.telefono %}</div>
+          </div>
+          <div class="row">
+            <div class="col-sm-5">
+              {% include 'includes/campo.html' with campo=form.rol %}
+              {% if form.rol.field.disabled and not creando %}
+                <div class="form-text small mt-n2 mb-3">{% if objetivo.pk == user.pk %}No puedes cambiar tu propio rol.{% else %}Solo un administrador cambia roles.{% endif %}</div>
+              {% endif %}
+            </div>
+            <div class="col-sm-7" id="bloque-empresa">{% include 'includes/campo.html' with campo=form.empresa ayuda=True %}</div>
+          </div>
+          {% if form.is_active %}
+            <div class="form-check mb-3">
+              {{ form.is_active }}
+              <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+              <div class="form-text small">{{ form.is_active.help_text }}</div>
+            </div>
+          {% endif %}
+          {% if creando %}
+            {% include 'includes/campo.html' with campo=form.password1 ayuda=True %}
+            {% include 'includes/campo.html' with campo=form.password2 %}
+          {% endif %}
+
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <a href="{% url 'gestion_usuarios' %}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary fw-bold">{% if creando %}Crear cuenta{% else %}Guardar cambios{% endif %}</button>
+            {% if eliminable %}
+              <a href="{% url 'gestion_eliminar_usuario' objetivo.pk %}" class="btn btn-outline-danger ms-auto">Eliminar cuenta</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% if not creando %}
+    <div class="col-lg-6">
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-header py-3"><h2 class="h6 fw-bold mb-0">🛡️ Historial de la cuenta</h2></div>
+        <div class="card-body p-0">{% include 'includes/historial.html' with registros=historial %}</div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // La empresa solo aplica a cuentas de cliente: se oculta para otros roles.
+  // (El servidor igual la descarta si el rol no es cliente.)
+  (function () {
+    var rol = document.getElementById('id_rol');
+    var bloque = document.getElementById('bloque-empresa');
+    if (!rol || !bloque) { return; }
+    function actualizar() { bloque.hidden = rol.value !== 'cliente'; }
+    rol.addEventListener('change', actualizar);
+    actualizar();
+  })();
+</script>
+{% endblock %}

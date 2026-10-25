@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Mis datos - RODAMAR{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header bg-dark text-white py-3 rounded-top-4">
+        <h1 class="h5 fw-bold mb-0">👤 Mis datos</h1>
+      </div>
+      <div class="card-body p-4">
+        <dl class="row small mb-3">
+          <dt class="col-5">Usuario</dt><dd class="col-7">{{ user.username }}</dd>
+          <dt class="col-5">Rol</dt><dd class="col-7">{{ rol_nombre }}</dd>
+          {% if es_cliente %}
+            <dt class="col-5">Empresa</dt>
+            <dd class="col-7">{{ perfil.empresa.nombre_completo|default:"Aún no vinculada" }}</dd>
+          {% endif %}
+        </dl>
+        <p class="small text-body-secondary">
+          El rol{% if es_cliente %} y la empresa{% endif %} solo los puede cambiar el personal de RODAMAR.
+          Cada cambio que hagas aquí queda registrado por seguridad.
+        </p>
+
+        <form method="POST" novalidate>
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.first_name %}</div>
+            <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.last_name %}</div>
+          </div>
+          {% include 'includes/campo.html' with campo=form.email %}
+          {% include 'includes/campo.html' with campo=form.telefono %}
+          {% include 'includes/campo.html' with campo=form.password_actual ayuda=True %}
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary fw-bold">Guardar cambios</button>
+            <a href="{% url 'cambiar_password' %}" class="btn btn-outline-secondary">🔑 Cambiar contraseña</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-0 rounded-4">
+      <div class="card-header py-3">
+        <h2 class="h6 fw-bold mb-0">🛡️ Historial de cambios de mi cuenta</h2>
+      </div>
+      <div class="card-body p-0">
+        {% include 'includes/historial.html' with registros=historial %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
