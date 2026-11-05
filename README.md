@@ -185,6 +185,20 @@ Ambos comandos leen las credenciales del `.env` y buscan `mysql` y `mysqldump` e
 
 > **Atención:** `importar_sql` reemplaza las tablas de la base de destino. Los respaldos pueden contener datos reales y están excluidos de git; solo se versiona `database/rodamar_demo.sql`.
 
+## Despliegue en Vercel
+
+Vercel detecta Django y ejecuta `collectstatic` al desplegar. Necesita una base MySQL accesible desde internet, con estas variables de entorno:
+
+| Variable | Valor |
+|---|---|
+| `SECRET_KEY` | Clave nueva, distinta a la local |
+| `DEBUG` | `False` |
+| `ALLOWED_HOSTS` | `.vercel.app` |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | Datos de la base en la nube |
+| `DB_SSL_CA` | Certificado CA de la base, en texto PEM |
+
+Las contraseñas de este README son públicas. En una base accesible desde internet, cámbialas con `python manage.py clave_demo` apuntando a esa base.
+
 ## Pruebas
 
 ```bash

@@ -1,18 +1,20 @@
 import re
 from datetime import date, datetime
+from io import StringIO
 
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.cache import cache
 from django.core.mail.backends.base import BaseEmailBackend
-from django.test import override_settings
-from django.test import TestCase
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from logistica.models import Buque, Cliente, Vehiculo
 
-from . import roles
+from . import auditoria, roles
 from .models import Perfil, RegistroAuditoria
 
 PASSWORD = 'Muelle#Seguro2026'
@@ -22,6 +24,34 @@ def crear_usuario(username, rol, **extra):
     u = User.objects.create_user(username, f'{username}@rodamar.cl', PASSWORD, **extra)
     roles.asignar_rol(u, rol)
     return User.objects.get(pk=u.pk)
+
+
+class IpEnVercelTests(TestCase):
+    def peticion(self):
+        return RequestFactory().get('/', HTTP_X_FORWARDED_FOR='200.1.2.3, 10.0.0.1', REMOTE_ADDR='10.0.0.1')
+
+    def test_fuera_de_vercel_no_confia_en_el_encabezado(self):
+        self.assertEqual(auditoria.obtener_ip(self.peticion()), '10.0.0.1')
+
+    @override_settings(EN_VERCEL=True)
+    def test_en_vercel_usa_la_ip_del_visitante(self):
+        self.assertEqual(auditoria.obtener_ip(self.peticion()), '200.1.2.3')
+
+
+class ClaveDemoTests(TestCase):
+    def test_cambia_solo_las_cuentas_demo(self):
+        demo = User.objects.create_user('admin_demo', 'a@x.cl', PASSWORD)
+        otra = User.objects.create_user('real', 'r@x.cl', PASSWORD)
+        call_command('clave_demo', clave='Nueva#Clave2026x', verbosity=0, stdout=StringIO())
+        demo.refresh_from_db()
+        otra.refresh_from_db()
+        self.assertTrue(demo.check_password('Nueva#Clave2026x'))
+        self.assertTrue(otra.check_password(PASSWORD))
+
+    def test_rechaza_una_clave_debil(self):
+        User.objects.create_user('admin_demo', 'a@x.cl', PASSWORD)
+        with self.assertRaises(CommandError):
+            call_command('clave_demo', clave='123', stdout=StringIO())
 
 
 class BackendQueFalla(BaseEmailBackend):

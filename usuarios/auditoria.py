@@ -1,12 +1,19 @@
 """Funciones para escribir en la bitácora de auditoría (RegistroAuditoria)."""
+from django.conf import settings
+
 from .models import RegistroAuditoria
 
 
 def obtener_ip(request):
     # Se usa REMOTE_ADDR y no X-Forwarded-For: ese encabezado lo puede
     # falsificar cualquiera si no hay un proxy de confianza delante.
+    # Vercel sí es de confianza: reemplaza el encabezado con la IP real del visitante.
     if request is None:
         return None
+    if getattr(settings, 'EN_VERCEL', False):
+        reenviada = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+        if reenviada:
+            return reenviada
     return request.META.get('REMOTE_ADDR') or None
 
 
