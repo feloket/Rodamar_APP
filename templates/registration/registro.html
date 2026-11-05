@@ -12,8 +12,9 @@
       </div>
       <div class="card-body p-4">
         <div class="alert alert-info py-2 small">
-          Tu cuenta quedará como <strong>cliente</strong>. Un empleado de RODAMAR la vinculará a tu empresa
-          para que puedas ver tus vehículos. ¿Eres empleado? Pide tu cuenta a un administrador.
+          Tu cuenta quedará como <strong>cliente</strong>. Te enviaremos un enlace para confirmar tu correo, y un
+          administrador de RODAMAR la vinculará a tu empresa para que veas tus vehículos.
+          ¿Eres empleado? Pide tu cuenta a un administrador.
         </div>
         {% for error in form.non_field_errors %}
           <div class="alert alert-danger py-2 small">{{ error }}</div>
@@ -21,8 +22,6 @@
 
         <form method="POST" novalidate>
           {% csrf_token %}
-          <input type="hidden" name="next" value="{{ next }}">
-
           {% include 'includes/campo.html' with campo=form.username %}
           <div class="row">
             <div class="col-sm-6">{% include 'includes/campo.html' with campo=form.first_name %}</div>

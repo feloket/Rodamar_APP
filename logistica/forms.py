@@ -2,6 +2,7 @@ from django import forms
 
 from usuarios.forms import BootstrapErroresMixin  # marca en rojo los campos con error
 from .models import Vehiculo, Buque, Cliente, CamionCiguena
+from .reglas import error_de_estado
 from .validadores import normalizar_patente, normalizar_rut, normalizar_vin
 
 # Formulario para registrar un Buque
@@ -66,5 +67,20 @@ class VehiculoForm(BootstrapErroresMixin, forms.ModelForm):
             'ubicacion_patio': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Bloque A - Fila 3'}),
         }
 
+    def __init__(self, *args, usuario=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.usuario = usuario
+        # Se guarda antes de validar: el ModelForm modifica la instancia al validar
+        self._estado_original = self.instance.estado if self.instance.pk else None
+
     def clean_chasis(self):
         return normalizar_vin(self.cleaned_data['chasis'])
+
+    def clean(self):
+        datos = super().clean()
+        estado = datos.get('estado')
+        if estado and 'camion_ciguena' in datos:
+            error = error_de_estado(self._estado_original, estado, datos['camion_ciguena'], self.usuario)
+            if error:
+                self.add_error('estado', error)
+        return datos

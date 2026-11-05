@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Reenviar confirmación - RODAMAR{% endblock %}
+{% block content %}
+<div class="row justify-content-center my-5">
+  <div class="col-md-7 col-lg-6 col-xl-5">
+    <div class="card shadow border-0 rounded-4">
+      <div class="card-header bg-dark text-white text-center py-4 rounded-top-4">
+        <h1 class="h4 fw-bold mb-0">✉️ Reenviar confirmación</h1>
+      </div>
+      <div class="card-body p-4">
+        <p class="small text-body-secondary">Escribe el correo con el que creaste tu cuenta y te enviaremos un enlace nuevo.</p>
+        <form method="POST" novalidate>
+          {% csrf_token %}
+          {% include 'includes/campo.html' with campo=form.email %}
+          <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold">Enviar enlace</button>
+        </form>
+      </div>
+      <div class="card-footer text-center bg-body-tertiary py-3 border-0 rounded-bottom-4">
+        <a href="{% url 'login' %}" class="text-decoration-none small text-body-secondary">Volver a iniciar sesión</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% autoescape off %}Hola {{ usuario.first_name|default:usuario.username }},
+
+Creaste una cuenta en RODAMAR con el usuario "{{ usuario.username }}". Para activarla, abre este enlace y presiona "Confirmar mi correo" (vence en {{ horas }} horas):
+
+{{ enlace }}
+
+Si no fuiste tú, ignora este mensaje: la cuenta no se activará.
+
+— Equipo RODAMAR
+{% endautoescape %}

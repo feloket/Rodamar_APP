@@ -3,7 +3,7 @@ from django.db import models
 
 from .validadores import (
     normalizar_patente, normalizar_rut, normalizar_vin,
-    validar_patente, validar_rut, validar_vin,
+    validar_patente, validar_rut, validar_telefono, validar_vin,
 )
 
 # Tabla 1: Buque que arriba al puerto
@@ -14,6 +14,14 @@ class Buque(models.Model):
     numero_viaje = models.CharField('Número de viaje', max_length=60)
     # Fecha exacta en que atraca en el muelle
     fecha_atraque = models.DateField('Fecha de atraque')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['nombre', 'numero_viaje'], name='buque_viaje_unico',
+                violation_error_message='Ya existe un buque con ese nombre y número de viaje.',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.nombre} (Viaje: {self.numero_viaje})"
@@ -26,7 +34,7 @@ class Cliente(models.Model):
     # RUT o Identificador único (no repetible)
     rut_o_id = models.CharField('RUT', max_length=20, unique=True, validators=[validar_rut])
     # Datos de contacto
-    telefono = models.CharField('Teléfono', max_length=30, blank=True, null=True)
+    telefono = models.CharField('Teléfono', max_length=30, blank=True, null=True, validators=[validar_telefono])
     email = models.EmailField('Correo', blank=True, null=True)
 
     def clean_fields(self, exclude=None):
@@ -91,9 +99,11 @@ class Vehiculo(models.Model):
     # vehículos asociados (antes CASCADE borraba el manifiesto completo).
     buque = models.ForeignKey(Buque, on_delete=models.PROTECT, related_name='vehiculos')
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='vehiculos', verbose_name='Empresa cliente')
+    # PROTECT también: borrar el camión dejaría vehículos en traslado o ya
+    # entregados sin registro de quién los transportó.
     camion_ciguena = models.ForeignKey(
         CamionCiguena, 
-        on_delete=models.SET_NULL, 
+        on_delete=models.PROTECT, 
         null=True, 
         blank=True, 
         related_name='vehiculos_cargados',

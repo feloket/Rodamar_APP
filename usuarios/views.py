@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
@@ -12,7 +11,7 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.debug import sensitive_post_parameters
 
-from . import auditoria, roles
+from . import auditoria, correo, filtros, roles
 from .limites import excede_limite
 from .forms import (
     CambiarPasswordForm,
@@ -21,6 +20,7 @@ from .forms import (
     NuevaPasswordForm,
     RecuperarPasswordForm,
     RegistroForm,
+    ReenviarConfirmacionForm,
     UsuarioCrearForm,
     UsuarioEditarForm,
 )
@@ -28,6 +28,17 @@ from .models import Perfil, RegistroAuditoria
 
 # Duración de la sesión cuando el usuario marca "Mantener sesión iniciada"
 DURACION_RECORDARME = 60 * 60 * 24 * 14  # 14 días
+
+# Límites de envío: el correo sale de una cuenta real, y un formulario público
+# sin límite permitiría usarla para llenar de mensajes a cualquiera.
+REGISTRO_MAX_POR_IP = 10
+CONFIRMACION_MAX_POR_IP = 5
+CONFIRMACION_MAX_POR_CORREO = 3
+VENTANA_ENVIOS_SEGUNDOS = 60 * 60  # 1 hora
+
+
+def _correo_en_consola():
+    return settings.EMAIL_BACKEND.endswith(('console.EmailBackend', 'correo_consola.EmailBackend'))
 
 
 def url_inicio(user):
@@ -58,9 +69,9 @@ def _asegurar_perfil(user):
 @sensitive_post_parameters('password1', 'password2')
 def registro_view(request):
     """
-    Registro público: crea SIEMPRE una cuenta de CLIENTE.
-    Las cuentas de empleado o admin solo las crea el personal autorizado
-    desde Gestión de usuarios.
+    Registro público: crea SIEMPRE una cuenta de CLIENTE, que no puede entrar
+    hasta confirmar su correo. Las cuentas de empleado o admin solo las crea
+    un administrador desde Gestión de usuarios.
     """
     if request.user.is_authenticated:
         return redirect(url_inicio(request.user))
@@ -68,22 +79,77 @@ def registro_view(request):
     if request.method == 'POST':
         form = RegistroForm(request.POST)
         if form.is_valid():
+            ip = auditoria.obtener_ip(request) or 'sin-ip'
+            if excede_limite(f'registro-ip:{ip}', REGISTRO_MAX_POR_IP, VENTANA_ENVIOS_SEGUNDOS):
+                messages.error(request, "Se crearon demasiadas cuentas desde esta conexión. Inténtalo más tarde.")
+                return redirect('registro')
             usuario = form.save()
             auditoria.registrar(
                 RegistroAuditoria.REGISTRO, request=request, actor=usuario,
                 usuario_afectado=usuario, detalle='Registro público como cliente',
             )
-            login(request, usuario)
-            messages.success(request, f"¡Bienvenido, {usuario.first_name or usuario.username}! Tu cuenta de cliente fue creada.")
-            return redirect(_url_siguiente_segura(request) or url_inicio(usuario))
+            if correo.enviar_confirmacion(request, usuario):
+                messages.success(request, f"Tu cuenta fue creada. Te enviamos un enlace a {usuario.email} para confirmarla.")
+            else:
+                messages.warning(request, "Tu cuenta fue creada, pero no pudimos enviar el correo. Inténtalo de nuevo más tarde desde esta página.")
+            return redirect('confirmacion_enviada')
         messages.error(request, "Revisa los datos ingresados.")
     else:
         form = RegistroForm()
 
-    return render(request, 'registration/registro.html', {
-        'form': form,
-        'next': _url_siguiente_segura(request) or '',
+    return render(request, 'registration/registro.html', {'form': form})
+
+
+# ---------------------------------------------------------------------------
+# Confirmación del correo de una cuenta nueva
+# ---------------------------------------------------------------------------
+def confirmacion_enviada(request):
+    return render(request, 'registration/confirmacion_enviada.html', {
+        'correo_en_consola': _correo_en_consola(),
     })
+
+
+def confirmar_correo(request, token):
+    """
+    GET muestra un botón y POST confirma. Si confirmara con el GET, los filtros
+    de correo que abren solos los enlaces (Microsoft lo hace con Safe Links)
+    confirmarían la cuenta sin que la persona haya hecho nada.
+    """
+    usuario = correo.usuario_desde_token(token)
+    if usuario is None:
+        return render(request, 'registration/confirmar_correo.html', {'invalido': True}, status=400)
+
+    if request.method == 'POST':
+        if not usuario.perfil.email_confirmado:
+            correo.marcar_confirmado(usuario, request)
+        messages.success(request, "Tu correo quedó confirmado. Ya puedes iniciar sesión.")
+        return redirect('login')
+
+    return render(request, 'registration/confirmar_correo.html', {
+        'usuario_confirma': usuario,
+        'ya_confirmado': usuario.perfil.email_confirmado,
+    })
+
+
+def reenviar_confirmacion(request):
+    if request.method == 'POST':
+        form = ReenviarConfirmacionForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email'].strip().lower()
+            ip = auditoria.obtener_ip(request) or 'sin-ip'
+            limitado = (excede_limite(f'confirmar-ip:{ip}', CONFIRMACION_MAX_POR_IP, VENTANA_ENVIOS_SEGUNDOS)
+                        or excede_limite(f'confirmar-mail:{email}', CONFIRMACION_MAX_POR_CORREO, VENTANA_ENVIOS_SEGUNDOS))
+            usuario = User.objects.filter(
+                email__iexact=email, is_active=True, perfil__email_confirmado=False,
+            ).first()
+            if usuario and not limitado:
+                correo.enviar_confirmacion(request, usuario)
+            # Misma respuesta en todos los casos: no revela qué correos existen
+            messages.info(request, "Si ese correo tiene una cuenta pendiente de confirmar, te enviamos un enlace nuevo.")
+            return redirect('confirmacion_enviada')
+    else:
+        form = ReenviarConfirmacionForm()
+    return render(request, 'registration/reenviar_confirmacion.html', {'form': form})
 
 
 class IniciarSesionView(auth_views.LoginView):
@@ -179,28 +245,20 @@ def mi_perfil(request):
 
 
 # ---------------------------------------------------------------------------
-# Gestión de usuarios (admin: todas las cuentas / empleado: solo clientes)
+# Gestión de usuarios: SOLO ADMIN. Un empleado o un cliente recibe 403.
 # ---------------------------------------------------------------------------
-def _usuarios_visibles(actor):
-    qs = User.objects.select_related('perfil__empresa').prefetch_related('groups').order_by('username')
-    if roles.es_admin(actor):
-        return qs
-    # Un empleado solo ve cuentas de cliente (no admins ni otros empleados)
-    return qs.filter(is_superuser=False).exclude(groups__name=roles.GRUPO_EMPLEADOS)
-
-
-@roles.rol_requerido(roles.ADMIN, roles.EMPLEADO)
+@roles.rol_requerido(roles.ADMIN)
 def gestion_usuarios(request):
     q = request.GET.get('q', '').strip()
     filtro_rol = request.GET.get('rol', '')
 
-    usuarios = _usuarios_visibles(request.user)
+    usuarios = User.objects.select_related('perfil__empresa').prefetch_related('groups').order_by('username')
     if q:
         usuarios = usuarios.filter(
             Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q)
             | Q(email__icontains=q) | Q(perfil__empresa__nombre_completo__icontains=q)
         )
-    if roles.es_admin(request.user) and filtro_rol:
+    if filtro_rol:
         if filtro_rol == roles.ADMIN:
             usuarios = usuarios.filter(is_superuser=True)
         elif filtro_rol == roles.EMPLEADO:
@@ -222,7 +280,7 @@ def gestion_usuarios(request):
 
 
 @sensitive_post_parameters('password1', 'password2')
-@roles.rol_requerido(roles.ADMIN, roles.EMPLEADO)
+@roles.rol_requerido(roles.ADMIN)
 def gestion_crear_usuario(request):
     if request.method == 'POST':
         form = UsuarioCrearForm(request.POST, actor=request.user)
@@ -243,11 +301,9 @@ def gestion_crear_usuario(request):
     return render(request, 'usuarios/gestion_form.html', {'form': form, 'creando': True})
 
 
-@roles.rol_requerido(roles.ADMIN, roles.EMPLEADO)
+@roles.rol_requerido(roles.ADMIN)
 def gestion_editar_usuario(request, pk):
     objetivo = get_object_or_404(User, pk=pk)
-    if not roles.puede_gestionar(request.user, objetivo):
-        raise PermissionDenied('Solo puedes gestionar cuentas de clientes.')
     _asegurar_perfil(objetivo)
 
     rol_anterior = roles.obtener_rol(objetivo)
@@ -276,12 +332,16 @@ def gestion_editar_usuario(request, pk):
     else:
         form = UsuarioEditarForm(instance=objetivo, actor=request.user)
 
-    historial = RegistroAuditoria.objects.filter(usuario_afectado=objetivo).select_related('actor')[:20]
+    historial = RegistroAuditoria.objects.filter(usuario_afectado=objetivo).select_related('actor')
+    historial, filtro_fecha = filtros.filtrar_por_fecha(historial, 'fecha', request.GET)
+    historial = filtros.ordenar(historial, 'fecha', request.GET)
     return render(request, 'usuarios/gestion_form.html', {
         'form': form,
         'creando': False,
         'objetivo': objetivo,
-        'historial': historial,
+        'pagina': Paginator(historial, 20).get_page(request.GET.get('page')),
+        'filtro_fecha': filtro_fecha,
+        'orden': filtros.leer_orden(request.GET),
         'eliminable': roles.puede_eliminar(request.user, objetivo),
     })
 
@@ -314,22 +374,57 @@ def gestion_eliminar_usuario(request, pk):
 @roles.rol_requerido(roles.ADMIN)
 def auditoria_lista(request):
     registros = RegistroAuditoria.objects.select_related('actor', 'usuario_afectado')
-    q = request.GET.get('q', '').strip()
-    accion = request.GET.get('accion', '')
+    g = request.GET
+    q = g.get('q', '').strip()
+    accion = g.get('accion', '')
+    rol = g.get('rol', '')
+    actor = g.get('actor', '').strip()
+    cuenta = g.get('cuenta', '').strip()
+    campo = g.get('campo', '')
+    valor = g.get('valor', '').strip()
+    ip = g.get('ip', '').strip()
+
     if q:
         registros = registros.filter(
             Q(usuario_afectado_texto__icontains=q) | Q(actor__username__icontains=q)
             | Q(detalle__icontains=q) | Q(objeto__icontains=q) | Q(ip__icontains=q)
+            | Q(campo__icontains=q) | Q(valor_anterior__icontains=q) | Q(valor_nuevo__icontains=q)
         )
     if accion:
         registros = registros.filter(accion=accion)
+    # El rol es el que tiene HOY quien realizó la acción (la bitácora no guarda el de ese momento)
+    if rol == roles.ADMIN:
+        registros = registros.filter(actor__is_superuser=True)
+    elif rol == roles.EMPLEADO:
+        registros = registros.filter(actor__is_superuser=False, actor__groups__name=roles.GRUPO_EMPLEADOS)
+    elif rol == roles.CLIENTE:
+        registros = registros.filter(actor__is_superuser=False).exclude(actor__groups__name=roles.GRUPO_EMPLEADOS)
+    elif rol == 'sistema':
+        registros = registros.filter(actor__isnull=True)
+    if actor:
+        registros = registros.filter(actor__username__icontains=actor)
+    if cuenta:
+        registros = registros.filter(Q(usuario_afectado_texto__icontains=cuenta) | Q(objeto__icontains=cuenta))
+    if campo:
+        registros = registros.filter(campo=campo)
+    if valor:
+        registros = registros.filter(Q(valor_anterior__icontains=valor) | Q(valor_nuevo__icontains=valor))
+    if ip:
+        registros = registros.filter(ip__icontains=ip)
 
-    pagina = Paginator(registros, 25).get_page(request.GET.get('page'))
+    registros, filtro_fecha = filtros.filtrar_por_fecha(registros, 'fecha', g)
+    registros = filtros.ordenar(registros, 'fecha', g)
+
     return render(request, 'usuarios/auditoria.html', {
-        'pagina': pagina,
-        'q': q,
-        'accion': accion,
+        'pagina': Paginator(registros, 25).get_page(g.get('page')),
+        'total': registros.count(),
+        'q': q, 'accion': accion, 'rol': rol, 'actor': actor, 'cuenta': cuenta,
+        'campo': campo, 'valor': valor, 'ip': ip,
         'acciones': RegistroAuditoria.ACCIONES,
+        'roles_filtro': [*roles.ROLES, ('sistema', 'Sistema / visitante')],
+        'campos': RegistroAuditoria.objects.exclude(campo='').order_by('campo').values_list('campo', flat=True).distinct(),
+        'filtro_fecha': filtro_fecha,
+        'orden': filtros.leer_orden(g),
     })
 
 
@@ -337,8 +432,7 @@ def auditoria_lista(request):
 # Recuperación de contraseña por correo
 # Usa las vistas de Django: el enlace lleva un token de un solo uso, que
 # vence (PASSWORD_RESET_TIMEOUT) y deja de servir apenas cambia la contraseña.
-# En este proyecto el correo se "envía" a la consola del servidor
-# (EMAIL_BACKEND de consola): nadie fuera del computador lo recibe.
+# El envío real depende de EMAIL_BACKEND: por defecto se imprime en la consola.
 # ---------------------------------------------------------------------------
 RESET_MAX_POR_IP = 5
 RESET_MAX_POR_CORREO = 3
@@ -383,7 +477,7 @@ class RecuperarPasswordEnviadoView(auth_views.PasswordResetDoneView):
     def get_context_data(self, **kwargs):
         contexto = super().get_context_data(**kwargs)
         # Aviso de que el correo está en la terminal (solo con el backend de consola)
-        contexto['correo_en_consola'] = settings.EMAIL_BACKEND.endswith(('console.EmailBackend', 'correo_consola.EmailBackend'))
+        contexto['correo_en_consola'] = _correo_en_consola()
         return contexto
 
 
@@ -400,6 +494,12 @@ class RecuperarPasswordConfirmarView(auth_views.PasswordResetConfirmView):
             RegistroAuditoria.RESET_COMPLETADO, request=self.request, actor=form.user,
             usuario_afectado=form.user,
         )
+        # Usar el enlace del correo ya prueba que el buzón es suyo. Además, si
+        # otra persona registró este correo sin confirmarlo, su dueño real
+        # recupera la cuenta por aquí (la contraseña anterior deja de servir).
+        _asegurar_perfil(form.user)
+        if not form.user.perfil.email_confirmado:
+            correo.marcar_confirmado(form.user, self.request)
         return respuesta
 
 

@@ -1,13 +1,16 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from usuarios import auditoria, roles
+from django.utils.http import url_has_allowed_host_and_scheme
+from usuarios import auditoria, filtros, roles
 from usuarios.limites import excede_limite
 from usuarios.models import Perfil, RegistroAuditoria
 from .models import Vehiculo, Buque, Cliente, CamionCiguena
 from .forms import VehiculoForm, BuqueForm, ClienteForm, CamionCiguenaForm
 from . import views_crud
+from .reglas import error_de_estado
 from .validadores import normalizar_vin
 
 # Las vistas operativas (panel, registrar buques/vehículos/clientes/camiones,
@@ -55,7 +58,7 @@ def rastreo_vehiculo(request):
             else:
                 detalle = _puede_ver_detalle(request.user, vehiculo)
                 if detalle:
-                    historial = vehiculo.historial.all()
+                    historial = filtros.ordenar(vehiculo.historial.all(), 'fecha', request.GET)
 
     return render(request, 'logistica/rastreo.html', {
         'vehiculo': vehiculo,
@@ -63,19 +66,41 @@ def rastreo_vehiculo(request):
         'mensaje_error': mensaje_error,
         'detalle': detalle,
         'historial': historial,
+        'orden': filtros.leer_orden(request.GET),
     })
 
 # Vista privada: Panel operativo para el operador
 @solo_personal
 def dashboard_operaciones(request):
-    q = request.GET.get('q', '').strip()
-    filtro_estado = request.GET.get('estado', '')
-    
+    g = request.GET
+    q = g.get('q', '').strip()
+    filtro_estado = g.get('estado', '')
+    # La búsqueda se conserva en el formulario con estos mismos nombres
+    filtrar = {nombre: g.get(nombre, '').strip()
+               for nombre in ['vehiculo', 'color', 'buque', 'cliente', 'ubicacion', 'ciguena']}
+
     vehiculos = Vehiculo.objects.all().select_related('buque', 'cliente', 'camion_ciguena')
     if q:
         vehiculos = vehiculos.filter(chasis__icontains=q)
     if filtro_estado:
         vehiculos = vehiculos.filter(estado=filtro_estado)
+    if filtrar['vehiculo']:
+        vehiculos = vehiculos.filter(Q(marca__icontains=filtrar['vehiculo']) | Q(modelo__icontains=filtrar['vehiculo']))
+    if filtrar['color']:
+        vehiculos = vehiculos.filter(color=filtrar['color'])
+    if filtrar['buque'].isdigit():
+        vehiculos = vehiculos.filter(buque_id=filtrar['buque'])
+    if filtrar['cliente'].isdigit():
+        vehiculos = vehiculos.filter(cliente_id=filtrar['cliente'])
+    if filtrar['ubicacion']:
+        vehiculos = vehiculos.filter(ubicacion_patio__icontains=filtrar['ubicacion'])
+    if filtrar['ciguena'] == 'sin':
+        vehiculos = vehiculos.filter(camion_ciguena__isnull=True)
+    elif filtrar['ciguena'].isdigit():
+        vehiculos = vehiculos.filter(camion_ciguena_id=filtrar['ciguena'])
+
+    vehiculos, filtro_fecha = filtros.filtrar_por_fecha(vehiculos, 'fecha_registro', g)
+    vehiculos = filtros.ordenar(vehiculos, 'fecha_registro', g)
 
     # Contadores de métricas
     total = Vehiculo.objects.count()
@@ -85,7 +110,15 @@ def dashboard_operaciones(request):
     entregados = Vehiculo.objects.filter(estado='ENTREGADO').count()
 
     return render(request, 'logistica/dashboard.html', {
-        'vehiculos': vehiculos,
+        'pagina': Paginator(vehiculos, 25).get_page(g.get('page')),
+        'total_filtrados': vehiculos.count(),
+        'filtrar': filtrar,
+        'filtro_fecha': filtro_fecha,
+        'orden': filtros.leer_orden(g),
+        'colores': Vehiculo.objects.exclude(color__isnull=True).exclude(color='').order_by('color').values_list('color', flat=True).distinct(),
+        'buques': Buque.objects.order_by('-fecha_atraque'),
+        'clientes': Cliente.objects.order_by('nombre_completo'),
+        'camiones': CamionCiguena.objects.order_by('patente'),
         'form': VehiculoForm(),
         'form_buque': BuqueForm(),
         'form_cliente': ClienteForm(),
@@ -127,9 +160,18 @@ def registrar_camion(request):
 def registrar_vehiculo(request):
     return views_crud.vista_formulario(
         request, form_class=VehiculoForm, titulo='Vehículo', volver='dashboard',
+        form_kwargs={'usuario': request.user},
         describir=views_crud._describir_vehiculo,
         despues_de_guardar=lambda v, ini: views_crud._historial_si_cambio(v, ini, request.user),
     )
+
+def _volver_al_panel(request):
+    """Vuelve al panel con los mismos filtros, si la dirección es de este sitio."""
+    destino = request.POST.get('volver', '')
+    if destino and url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):
+        return redirect(destino)
+    return redirect('dashboard')
+
 
 # Actualización rápida de estado y patio desde la tabla
 @solo_personal
@@ -142,7 +184,12 @@ def actualizar_estado_vehiculo(request, pk):
         estados_validos = dict(Vehiculo.ESTADOS)
         if nuevo_estado and nuevo_estado not in estados_validos:
             messages.error(request, "Estado no válido.")
-            return redirect('dashboard')
+            return _volver_al_panel(request)
+        if nuevo_estado and nuevo_estado != vehiculo.estado:
+            error = error_de_estado(vehiculo.estado, nuevo_estado, vehiculo.camion_ciguena_id, request.user)
+            if error:
+                messages.error(request, f"Chasis {vehiculo.chasis}: {error}")
+                return _volver_al_panel(request)
         estado_anterior = vehiculo.estado
         ubicacion_anterior = vehiculo.ubicacion_patio or ''
         if nuevo_estado:
@@ -152,13 +199,13 @@ def actualizar_estado_vehiculo(request, pk):
 
         if vehiculo.estado == estado_anterior and (vehiculo.ubicacion_patio or '') == ubicacion_anterior:
             messages.info(request, f"Chasis {vehiculo.chasis}: no hubo cambios.")
-            return redirect('dashboard')
+            return _volver_al_panel(request)
 
         vehiculo.save()
         # Trazabilidad: quién cambió qué y cuándo
         vehiculo.registrar_cambio(request.user, estado_anterior=estado_anterior, ubicacion_anterior=ubicacion_anterior)
         messages.success(request, f"Actualizado chasis {vehiculo.chasis}.")
-    return redirect('dashboard')
+    return _volver_al_panel(request)
 
 
 # Vista del CLIENTE: solo los vehículos de la empresa vinculada a su cuenta.
@@ -217,5 +264,6 @@ def editar_empresa(request, pk):
     return render(request, 'logistica/empresa_form.html', {
         'form': form,
         'empresa': empresa,
-        'cuentas': empresa.cuentas.select_related('usuario'),
+        # Datos de cuentas de usuario: solo para el admin
+        'cuentas': empresa.cuentas.select_related('usuario') if roles.es_admin(request.user) else [],
     })

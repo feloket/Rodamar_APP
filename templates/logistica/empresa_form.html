@@ -28,6 +28,8 @@
       </div>
     </div>
   </div>
+  {# Las cuentas de usuario solo las gestiona un administrador #}
+  {% if es_admin %}
   <div class="col-lg-6">
     <div class="card shadow-sm border-0 rounded-4">
       <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -46,5 +48,6 @@
       </ul>
     </div>
   </div>
+  {% endif %}
 </div>
 {% endblock %}

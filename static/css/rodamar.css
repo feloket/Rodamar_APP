@@ -80,3 +80,17 @@ body,
 /* Tablas con mucho texto: evita que con letra grande se aplasten las columnas */
 .table td, .table th { white-space: nowrap; }
 .table td.ajustable { white-space: normal; }
+
+/* Columna de acciones: queda siempre visible, aunque la tabla necesite
+   desplazamiento horizontal en pantallas angostas o con letra grande. */
+.table th.text-end:last-child,
+.table td.text-end:last-child,
+.table .col-acciones {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  border-left: 1px solid var(--bs-border-color);
+}
+
+/* Actualización rápida del panel: el estado en una línea y debajo el patio con los botones */
+.form-estado { width: 15rem; }

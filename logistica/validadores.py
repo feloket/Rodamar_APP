@@ -12,6 +12,12 @@ Cada dato tiene dos funciones:
 import re
 
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+
+validar_telefono = RegexValidator(
+    regex=r'^\+?[0-9 ]{8,15}$',
+    message='Ingresa un teléfono válido, por ejemplo +56 9 1234 5678.',
+)
 
 # ---------------------------------------------------------------------------
 # VIN / Chasis (norma ISO 3779): 17 caracteres, sin I, O ni Q

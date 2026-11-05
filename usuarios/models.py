@@ -1,6 +1,7 @@
 from django.conf import settings
-from django.core.validators import RegexValidator
 from django.db import models
+
+from logistica.validadores import validar_telefono
 
 # El proyecto sigue usando django.contrib.auth.User (el estándar de Django).
 # Los roles se manejan con is_superuser + Grupos: ver usuarios/roles.py
@@ -12,12 +13,6 @@ from django.db import models
 #
 # User no tiene campo de teléfono ni relación con la empresa cliente, por
 # eso se agrega un Perfil con OneToOneField (se crea solo, ver signals.py).
-
-validar_telefono = RegexValidator(
-    regex=r'^\+?[0-9 ]{8,15}$',
-    message='Ingresa un teléfono válido, por ejemplo +56 9 1234 5678.',
-)
-
 
 class Perfil(models.Model):
     usuario = models.OneToOneField(
@@ -34,6 +29,10 @@ class Perfil(models.Model):
         related_name='cuentas',
         verbose_name='Empresa cliente',
     )
+    # Solo el registro público deja esto en False hasta que se abra el enlace
+    # del correo. Las cuentas creadas por un admin, por createsuperuser o por
+    # datos_demo quedan confirmadas: nadie se queda fuera por no tener correo.
+    email_confirmado = models.BooleanField('Correo confirmado', default=True)
 
     class Meta:
         verbose_name = 'Perfil'
@@ -67,6 +66,7 @@ class RegistroAuditoria(models.Model):
     CREACION_REGISTRO = 'CREACION_REGISTRO'
     EDICION_REGISTRO = 'EDICION_REGISTRO'
     ELIMINACION_REGISTRO = 'ELIMINACION_REGISTRO'
+    CORREO_CONFIRMADO = 'CORREO_CONFIRMADO'
 
     ACCIONES = [
         (LOGIN, 'Inicio de sesión'),
@@ -86,6 +86,7 @@ class RegistroAuditoria(models.Model):
         (CREACION_REGISTRO, 'Creación de registro (buque, camión, vehículo, empresa)'),
         (EDICION_REGISTRO, 'Edición de registro'),
         (ELIMINACION_REGISTRO, 'Eliminación de registro'),
+        (CORREO_CONFIRMADO, 'Correo confirmado'),
     ]
 
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)

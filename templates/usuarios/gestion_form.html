@@ -3,7 +3,7 @@
 {% block content %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="{% url 'gestion_usuarios' %}">{% if es_admin %}Usuarios{% else %}Cuentas cliente{% endif %}</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'gestion_usuarios' %}">Usuarios</a></li>
     <li class="breadcrumb-item active" aria-current="page">{% if creando %}Nueva cuenta{% else %}{{ objetivo.username }}{% endif %}</li>
   </ol>
 </nav>
@@ -15,9 +15,6 @@
         <h1 class="h5 fw-bold mb-0">{% if creando %}➕ Nueva cuenta{% else %}✏️ Editar cuenta: {{ objetivo.username }}{% endif %}</h1>
       </div>
       <div class="card-body p-4">
-        {% if not es_admin %}
-          <div class="alert alert-info py-2 small">Como empleado solo puedes crear y editar cuentas de <strong>cliente</strong>.</div>
-        {% endif %}
         {% for error in form.non_field_errors %}<div class="alert alert-danger py-2 small">{{ error }}</div>{% endfor %}
 
         <form method="POST" novalidate>
@@ -35,7 +32,7 @@
             <div class="col-sm-5">
               {% include 'includes/campo.html' with campo=form.rol %}
               {% if form.rol.field.disabled and not creando %}
-                <div class="form-text small mt-n2 mb-3">{% if objetivo.pk == user.pk %}No puedes cambiar tu propio rol.{% else %}Solo un administrador cambia roles.{% endif %}</div>
+                <div class="form-text small mt-n2 mb-3">No puedes cambiar tu propio rol.</div>
               {% endif %}
             </div>
             <div class="col-sm-7" id="bloque-empresa">{% include 'includes/campo.html' with campo=form.empresa ayuda=True %}</div>
@@ -45,6 +42,11 @@
               {{ form.is_active }}
               <label class="form-check-label" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
               <div class="form-text small">{{ form.is_active.help_text }}</div>
+            </div>
+            <div class="form-check mb-3">
+              {{ form.email_confirmado }}
+              <label class="form-check-label" for="{{ form.email_confirmado.id_for_label }}">{{ form.email_confirmado.label }}</label>
+              <div class="form-text small">{{ form.email_confirmado.help_text }}</div>
             </div>
           {% endif %}
           {% if creando %}
@@ -68,8 +70,18 @@
     <div class="col-lg-6">
       <div class="card shadow-sm border-0 rounded-4">
         <div class="card-header py-3"><h2 class="h6 fw-bold mb-0">🛡️ Historial de la cuenta</h2></div>
-        <div class="card-body p-0">{% include 'includes/historial.html' with registros=historial %}</div>
+        <div class="card-body border-bottom p-3">
+          <form method="GET" class="row g-2 align-items-end">
+            {% include 'includes/filtro_fecha.html' with f=filtro_fecha orden=orden ancho=4 %}
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-sm btn-dark">Filtrar</button>
+              <a href="{{ request.path }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+            </div>
+          </form>
+        </div>
+        <div class="card-body p-0">{% include 'includes/historial.html' with registros=pagina %}</div>
       </div>
+      {% include 'includes/paginacion.html' %}
     </div>
   {% endif %}
 </div>

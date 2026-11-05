@@ -76,15 +76,13 @@
                   <li><a class="dropdown-item" href="{% url 'lista_empresas' %}">🏢 Empresas cliente</a></li>
                 </ul>
               </li>
-              <li class="nav-item">
-                <a class="nav-link {% if ruta|slice:':8' == 'gestion_' %}active fw-bold{% endif %}" href="{% url 'gestion_usuarios' %}">
-                  👥 {% if es_admin %}Usuarios{% else %}Cuentas cliente{% endif %}
-                </a>
-              </li>
             {% endif %}
 
             {% if es_admin %}
               <!-- Solo Admin -->
+              <li class="nav-item">
+                <a class="nav-link {% if ruta|slice:':8' == 'gestion_' %}active fw-bold{% endif %}" href="{% url 'gestion_usuarios' %}">👥 Usuarios</a>
+              </li>
               <li class="nav-item">
                 <a class="nav-link {% if ruta == 'auditoria' %}active fw-bold{% endif %}" href="{% url 'auditoria' %}">🛡️ Auditoría</a>
               </li>
