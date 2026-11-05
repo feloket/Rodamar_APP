@@ -38,14 +38,15 @@ def _valores(instancia, form_class):
 
 
 def vista_formulario(request, *, form_class, titulo, volver, instancia=None,
-                     describir=str, despues_de_guardar=None):
+                     describir=str, despues_de_guardar=None, form_kwargs=None):
     """
     Muestra y procesa un formulario de creación (instancia=None) o edición.
     Audita la creación o cada campo modificado.
     """
     creando = instancia is None
+    form_kwargs = form_kwargs or {}
     if request.method == 'POST':
-        form = form_class(request.POST, instance=instancia)
+        form = form_class(request.POST, instance=instancia, **form_kwargs)
         iniciales = {} if creando else _valores(instancia, form_class)
         if form.is_valid():
             cambios = [] if creando else auditoria.detectar_cambios(form, iniciales)
@@ -54,17 +55,17 @@ def vista_formulario(request, *, form_class, titulo, volver, instancia=None,
                 despues_de_guardar(objeto, iniciales)
             if creando:
                 auditoria.registrar(RegistroAuditoria.CREACION_REGISTRO, request=request, objeto=describir(objeto))
-                messages.success(request, f"{titulo} creado: {objeto}.")
+                messages.success(request, f"{titulo}: registro creado ({objeto}).")
             elif cambios:
                 auditoria.registrar_cambios(RegistroAuditoria.EDICION_REGISTRO, cambios,
                                             request=request, objeto=describir(objeto))
-                messages.success(request, f"{titulo} actualizado ({len(cambios)} cambio(s)).")
+                messages.success(request, f"{titulo}: registro actualizado ({len(cambios)} cambio(s)).")
             else:
                 messages.info(request, "No hubo cambios.")
             return redirect(volver)
         messages.error(request, "Revisa los datos marcados en rojo.")
     else:
-        form = form_class(instance=instancia)
+        form = form_class(instance=instancia, **form_kwargs)
 
     return render(request, 'logistica/registro_form.html', {
         'form': form,
@@ -87,7 +88,7 @@ def vista_eliminar(request, *, objeto, titulo, volver, describir=str, advertenci
                                     f"Reasígnalos o elimínalos primero.")
             return redirect(volver)
         auditoria.registrar(RegistroAuditoria.ELIMINACION_REGISTRO, request=request, objeto=descripcion)
-        messages.success(request, f"{titulo} eliminado: {descripcion}.")
+        messages.success(request, f"{titulo}: registro eliminado ({descripcion}).")
         return redirect(volver)
 
     return render(request, 'logistica/registro_eliminar.html', {
@@ -174,7 +175,7 @@ def camion_eliminar(request, pk):
     camion = get_object_or_404(CamionCiguena, pk=pk)
     return vista_eliminar(request, objeto=camion, titulo='Camión', volver='camiones_lista',
                           describir=_describir_camion,
-                          advertencia='Los vehículos asignados a este camión quedarán sin cigüeña asignada.')
+                          advertencia='Un camión que ya transportó vehículos no se puede eliminar: se perdería el registro de quién los llevó.')
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +228,7 @@ def vehiculos_lista(request):
 @solo_personal
 def vehiculo_crear(request):
     return vista_formulario(request, form_class=VehiculoForm, titulo='Vehículo', volver='vehiculos_lista',
-                            describir=_describir_vehiculo,
+                            form_kwargs={'usuario': request.user}, describir=_describir_vehiculo,
                             despues_de_guardar=lambda v, ini: _historial_si_cambio(v, ini, request.user))
 
 
@@ -235,6 +236,7 @@ def vehiculo_crear(request):
 def vehiculo_editar(request, pk):
     return vista_formulario(request, form_class=VehiculoForm, titulo='Vehículo', volver='vehiculos_lista',
                             instancia=get_object_or_404(Vehiculo, pk=pk), describir=_describir_vehiculo,
+                            form_kwargs={'usuario': request.user},
                             despues_de_guardar=lambda v, ini: _historial_si_cambio(v, ini, request.user))
 
 

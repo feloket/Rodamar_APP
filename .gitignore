@@ -11,6 +11,10 @@ __pycache__/
 # Base de datos local
 db.sqlite3
 
+# Respaldos de la base: pueden traer datos reales. Solo se versiona el demo.
+database/*.sql
+!database/rodamar_demo.sql
+
 # Variables de entorno / secretos
 .env
 *.env

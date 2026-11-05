@@ -1,0 +1,49 @@
+# Migración: confirmación de correo
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("usuarios", "0004_acciones_crud"),
+    ]
+
+    operations = [
+        migrations.AddField(
+            model_name="perfil",
+            name="email_confirmado",
+            field=models.BooleanField(default=True, verbose_name="Correo confirmado"),
+        ),
+        migrations.AlterField(
+            model_name="registroauditoria",
+            name="accion",
+            field=models.CharField(
+                choices=[
+                    ("LOGIN", "Inicio de sesión"),
+                    ("LOGIN_FALLIDO", "Inicio de sesión fallido"),
+                    ("LOGOUT", "Cierre de sesión"),
+                    ("REGISTRO", "Registro de cliente"),
+                    ("CREACION_CUENTA", "Creación de cuenta"),
+                    ("EDICION_PERFIL", "Edición de datos propios"),
+                    ("EDICION_CUENTA", "Edición de cuenta por personal"),
+                    ("CAMBIO_ROL", "Cambio de rol"),
+                    ("CAMBIO_PASSWORD", "Cambio de contraseña"),
+                    ("ELIMINACION_CUENTA", "Eliminación de cuenta"),
+                    ("EDICION_EMPRESA", "Edición de empresa cliente"),
+                    ("LOGIN_BLOQUEADO", "Login bloqueado por intentos fallidos"),
+                    ("RESET_SOLICITADO", "Recuperación de contraseña solicitada"),
+                    ("RESET_COMPLETADO", "Contraseña restablecida por correo"),
+                    (
+                        "CREACION_REGISTRO",
+                        "Creación de registro (buque, camión, vehículo, empresa)",
+                    ),
+                    ("EDICION_REGISTRO", "Edición de registro"),
+                    ("ELIMINACION_REGISTRO", "Eliminación de registro"),
+                    ("CORREO_CONFIRMADO", "Correo confirmado"),
+                ],
+                db_index=True,
+                max_length=30,
+            ),
+        ),
+    ]

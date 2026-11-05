@@ -42,7 +42,8 @@
       </div>
       <div class="card-footer text-center bg-body-tertiary py-3 border-0 rounded-bottom-4">
         <a href="{% url 'rastreo' %}" class="text-decoration-none small text-body-secondary d-block mb-2">¿Eres cliente? Consulta tu vehículo aquí</a>
-        <a href="{% url 'registro' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="text-decoration-none small text-body-secondary">¿No tienes cuenta? Regístrate</a>
+        <a href="{% url 'registro' %}" class="text-decoration-none small text-body-secondary d-block mb-2">¿No tienes cuenta? Regístrate</a>
+        <a href="{% url 'reenviar_confirmacion' %}" class="text-decoration-none small text-body-secondary">¿No te llegó el correo de confirmación?</a>
       </div>
     </div>
   </div>

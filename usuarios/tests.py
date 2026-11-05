@@ -1,16 +1,19 @@
-from datetime import date
+import re
+from datetime import date, datetime
 
 from django.contrib.auth.models import User
 from django.core import mail
 from django.core.cache import cache
+from django.core.mail.backends.base import BaseEmailBackend
 from django.test import override_settings
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from logistica.models import Buque, Cliente, Vehiculo
 
 from . import roles
-from .models import RegistroAuditoria
+from .models import Perfil, RegistroAuditoria
 
 PASSWORD = 'Muelle#Seguro2026'
 
@@ -19,6 +22,13 @@ def crear_usuario(username, rol, **extra):
     u = User.objects.create_user(username, f'{username}@rodamar.cl', PASSWORD, **extra)
     roles.asignar_rol(u, rol)
     return User.objects.get(pk=u.pk)
+
+
+class BackendQueFalla(BaseEmailBackend):
+    """Simula un servidor de correo caído o que rechaza la autenticación."""
+
+    def send_messages(self, email_messages):
+        raise OSError('servidor de correo no disponible')
 
 
 class BaseRoles(TestCase):
@@ -47,13 +57,13 @@ class RegistroTests(TestCase):
 
     def test_registro_crea_cliente(self):
         r = self.client.post(reverse('registro'), self.datos())
-        self.assertRedirects(r, reverse('mis_vehiculos'))
+        self.assertRedirects(r, reverse('confirmacion_enviada'))
         u = User.objects.get(username='nuevo')
         self.assertEqual(roles.obtener_rol(u), roles.CLIENTE)
         self.assertFalse(u.is_staff or u.is_superuser)
         self.assertEqual(u.email, 'juan@empresa.cl')
         self.assertEqual(u.perfil.telefono, '+56 9 1234 5678')
-        self.assertIsNone(u.perfil.empresa)  # la empresa la asigna un empleado
+        self.assertIsNone(u.perfil.empresa)  # la empresa la asigna un admin
         self.assertTrue(RegistroAuditoria.objects.filter(accion='REGISTRO', usuario_afectado=u).exists())
 
     def test_registro_ignora_intentos_de_escalar_privilegios(self):
@@ -140,7 +150,7 @@ class LoginLogoutTests(BaseRoles):
         self.entrar(self.empleado)
         r = self.client.get(reverse('home'))
         self.assertContains(r, reverse('dashboard'))
-        self.assertContains(r, 'Cuentas cliente')
+        self.assertNotContains(r, reverse('gestion_usuarios'))
         self.assertNotContains(r, reverse('auditoria'))
         self.assertNotContains(r, 'Admin de Django')
 
@@ -206,22 +216,39 @@ class GestionCuentasTests(BaseRoles):
         datos.update(extra)
         return datos
 
-    def test_empleado_crea_cliente_con_empresa(self):
+    def test_empleado_no_tiene_acceso_a_ninguna_cuenta(self):
         self.entrar(self.empleado)
+        for nombre, args in [('gestion_usuarios', []), ('gestion_crear_usuario', []),
+                             ('gestion_editar_usuario', [self.cliente.pk]),
+                             ('gestion_eliminar_usuario', [self.cliente.pk])]:
+            self.assertEqual(self.client.get(reverse(nombre, args=args)).status_code, 403, nombre)
+
+    def test_empleado_no_crea_cuentas_ni_por_post_directo(self):
+        self.entrar(self.empleado)
+        r = self.client.post(reverse('gestion_crear_usuario'), self.datos_nueva('cliente'))
+        self.assertEqual(r.status_code, 403)
+        self.assertFalse(User.objects.filter(username='nueva').exists())
+
+    def test_empleado_no_edita_cuentas_ni_por_post_directo(self):
+        self.entrar(self.empleado)
+        r = self.client.post(reverse('gestion_editar_usuario', args=[self.cliente.pk]), {
+            'first_name': 'Otro', 'last_name': 'Nombre', 'email': 'cliente1@rodamar.cl', 'telefono': '',
+            'rol': 'admin', 'empresa': self.empresa.pk,
+        })
+        self.assertEqual(r.status_code, 403)
+        self.cliente.refresh_from_db()
+        self.assertNotEqual(self.cliente.first_name, 'Otro')
+        self.assertFalse(self.cliente.is_superuser)
+
+    def test_admin_crea_cliente_con_empresa(self):
+        self.entrar(self.admin)
         r = self.client.post(reverse('gestion_crear_usuario'), self.datos_nueva('cliente'))
         self.assertRedirects(r, reverse('gestion_usuarios'))
         u = User.objects.get(username='nueva')
         self.assertEqual(roles.obtener_rol(u), roles.CLIENTE)
         self.assertEqual(u.perfil.empresa, self.empresa)
-        reg = RegistroAuditoria.objects.get(accion='CREACION_CUENTA')
-        self.assertEqual(reg.actor, self.empleado)
-
-    def test_empleado_no_puede_crear_empleado_ni_admin(self):
-        self.entrar(self.empleado)
-        for rol in ['empleado', 'admin']:
-            r = self.client.post(reverse('gestion_crear_usuario'), self.datos_nueva(rol))
-            self.assertEqual(r.status_code, 200)
-            self.assertFalse(User.objects.filter(username='nueva').exists())
+        self.assertTrue(u.perfil.email_confirmado)  # la crea un admin: entra de inmediato
+        self.assertEqual(RegistroAuditoria.objects.get(accion='CREACION_CUENTA').actor, self.admin)
 
     def test_admin_crea_otro_admin(self):
         self.entrar(self.admin)
@@ -230,34 +257,34 @@ class GestionCuentasTests(BaseRoles):
         self.assertTrue(u.is_superuser and u.is_staff)
         self.assertIsNone(u.perfil.empresa)  # la empresa solo aplica a clientes
 
-    def test_empleado_no_ve_ni_edita_otros_empleados(self):
-        otro = crear_usuario('empleado2', roles.EMPLEADO)
-        self.entrar(self.empleado)
-        lista = self.client.get(reverse('gestion_usuarios'))
-        self.assertContains(lista, 'cliente1')
-        self.assertNotContains(lista, 'empleado2')
-        self.assertNotContains(lista, 'admin1')
-        self.assertEqual(self.client.get(reverse('gestion_editar_usuario', args=[otro.pk])).status_code, 403)
-        self.assertEqual(self.client.get(reverse('gestion_editar_usuario', args=[self.admin.pk])).status_code, 403)
-
-    def test_empleado_vincula_empresa_a_cliente_y_queda_auditado(self):
-        self.entrar(self.empleado)
-        r = self.client.post(reverse('gestion_editar_usuario', args=[self.cliente.pk]), {
-            'first_name': 'Ana', 'last_name': '', 'email': 'cliente1@rodamar.cl', 'telefono': '',
-            'rol': 'admin',  # intento de escalar: se ignora (campo deshabilitado)
-            'empresa': self.empresa.pk,
-        })
-        self.assertEqual(r.status_code, 200)  # last_name es obligatorio
+    def test_admin_vincula_empresa_a_cliente_y_queda_auditado(self):
+        self.entrar(self.admin)
         r = self.client.post(reverse('gestion_editar_usuario', args=[self.cliente.pk]), {
             'first_name': 'Ana', 'last_name': 'Soto', 'email': 'cliente1@rodamar.cl', 'telefono': '',
-            'rol': 'admin', 'empresa': self.empresa.pk,
+            'rol': 'cliente', 'empresa': self.empresa.pk, 'is_active': 'on', 'email_confirmado': 'on',
         })
         self.assertRedirects(r, reverse('gestion_usuarios'))
         self.cliente.refresh_from_db()
-        self.assertEqual(roles.obtener_rol(User.objects.get(pk=self.cliente.pk)), roles.CLIENTE)
         self.assertEqual(self.cliente.perfil.empresa, self.empresa)
         self.assertTrue(RegistroAuditoria.objects.filter(
-            accion='EDICION_CUENTA', campo='Empresa cliente', actor=self.empleado).exists())
+            accion='EDICION_CUENTA', campo='Empresa cliente', actor=self.admin).exists())
+
+    def test_admin_confirma_correo_a_mano(self):
+        self.cliente.perfil.email_confirmado = False
+        self.cliente.perfil.save()
+        self.entrar(self.admin)
+        self.client.post(reverse('gestion_editar_usuario', args=[self.cliente.pk]), {
+            'first_name': 'Ana', 'last_name': 'Soto', 'email': 'cliente1@rodamar.cl', 'telefono': '',
+            'rol': 'cliente', 'empresa': '', 'is_active': 'on', 'email_confirmado': 'on',
+        })
+        self.assertTrue(Perfil.objects.get(usuario=self.cliente).email_confirmado)
+
+    def test_cliente_no_elimina_ni_edita_otras_cuentas(self):
+        otro = crear_usuario('cliente2', roles.CLIENTE)
+        self.entrar(self.cliente)
+        self.assertEqual(self.client.post(reverse('gestion_eliminar_usuario', args=[otro.pk])).status_code, 403)
+        self.assertEqual(self.client.post(reverse('gestion_editar_usuario', args=[otro.pk]), {}).status_code, 403)
+        self.assertTrue(User.objects.filter(pk=otro.pk).exists())
 
     def test_solo_admin_elimina_cuentas(self):
         self.entrar(self.empleado)
@@ -532,3 +559,184 @@ class RevisionLogicaTests(BaseRoles):
     def test_admin_django_auditoria_carga(self):
         self.entrar(self.admin)
         self.assertEqual(self.client.get('/admin/usuarios/registroauditoria/').status_code, 200)
+
+
+# ---------------------------------------------------------------------------
+# Confirmación de correo al crear una cuenta
+# ---------------------------------------------------------------------------
+class ConfirmacionCorreoTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.datos = {
+            'username': 'nuevo', 'first_name': 'Juan', 'last_name': 'Pérez', 'email': 'juan@empresa.cl',
+            'telefono': '', 'password1': PASSWORD, 'password2': PASSWORD,
+        }
+
+    def registrar(self):
+        self.client.post(reverse('registro'), self.datos)
+        return User.objects.get(username='nuevo')
+
+    def enlace(self):
+        return re.search(r'http://testserver(/\S+)', mail.outbox[-1].body).group(1)
+
+    def entrar(self, username='nuevo'):
+        return self.client.post(reverse('login'), {'username': username, 'password': PASSWORD})
+
+    def test_registro_envia_correo_y_no_inicia_sesion(self):
+        u = self.registrar()
+        self.assertFalse(u.perfil.email_confirmado)
+        self.assertEqual(mail.outbox[0].to, ['juan@empresa.cl'])
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_sin_confirmar_no_puede_entrar(self):
+        self.registrar()
+        r = self.entrar()
+        self.assertContains(r, 'Todavía no confirmas tu correo')
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_contrasena_incorrecta_no_revela_que_falta_confirmar(self):
+        self.registrar()
+        r = self.client.post(reverse('login'), {'username': 'nuevo', 'password': 'equivocada'})
+        self.assertNotContains(r, 'Todavía no confirmas')
+
+    def test_get_no_confirma_y_post_si(self):
+        u = self.registrar()
+        enlace = self.enlace()
+        self.assertEqual(self.client.get(enlace).status_code, 200)  # p. ej. un filtro de correo que abre el enlace
+        self.assertFalse(Perfil.objects.get(usuario=u).email_confirmado)
+        self.assertRedirects(self.client.post(enlace), reverse('login'))
+        self.assertTrue(Perfil.objects.get(usuario=u).email_confirmado)
+        self.assertTrue(RegistroAuditoria.objects.filter(accion='CORREO_CONFIRMADO', usuario_afectado=u).exists())
+        self.assertRedirects(self.entrar(), reverse('mis_vehiculos'))
+
+    def test_token_alterado_es_rechazado(self):
+        self.registrar()
+        self.assertEqual(self.client.get(self.enlace()[:-3] + 'xx/').status_code, 400)
+
+    def test_token_vencido_es_rechazado(self):
+        self.registrar()
+        enlace = self.enlace()
+        with override_settings(CONFIRMACION_CORREO_HORAS=-1):
+            self.assertEqual(self.client.post(enlace).status_code, 400)
+
+    def test_token_no_sirve_si_cambio_el_correo(self):
+        u = self.registrar()
+        enlace = self.enlace()
+        User.objects.filter(pk=u.pk).update(email='otro@empresa.cl')
+        self.assertEqual(self.client.post(enlace).status_code, 400)
+        self.assertFalse(Perfil.objects.get(usuario=u).email_confirmado)
+
+    def test_cuenta_desactivada_no_se_reactiva_con_el_enlace(self):
+        u = self.registrar()
+        enlace = self.enlace()
+        User.objects.filter(pk=u.pk).update(is_active=False)
+        self.assertEqual(self.client.post(enlace).status_code, 400)
+        self.assertFalse(User.objects.get(pk=u.pk).is_active)
+
+    def test_si_falla_el_envio_no_hay_error_500_y_se_puede_reenviar(self):
+        with override_settings(EMAIL_BACKEND='usuarios.tests.BackendQueFalla'):
+            r = self.client.post(reverse('registro'), self.datos, follow=True)
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'no pudimos enviar el correo')
+        self.assertTrue(User.objects.filter(username='nuevo').exists())
+        self.client.post(reverse('reenviar_confirmacion'), {'email': 'juan@empresa.cl'})
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_reenviar_no_revela_si_el_correo_existe(self):
+        self.registrar()
+        mail.outbox.clear()
+        existe = self.client.post(reverse('reenviar_confirmacion'), {'email': 'juan@empresa.cl'}, follow=True)
+        no_existe = self.client.post(reverse('reenviar_confirmacion'), {'email': 'nadie@empresa.cl'}, follow=True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertContains(existe, 'Si ese correo tiene una cuenta')
+        self.assertContains(no_existe, 'Si ese correo tiene una cuenta')
+
+    def test_reenviar_tiene_limite(self):
+        self.registrar()
+        mail.outbox.clear()
+        for _ in range(5):
+            self.client.post(reverse('reenviar_confirmacion'), {'email': 'juan@empresa.cl'})
+        self.assertEqual(len(mail.outbox), 3)
+
+    def test_registro_tiene_limite_por_ip(self):
+        for i in range(12):
+            self.client.post(reverse('registro'), {**self.datos, 'username': f'u{i}', 'email': f'u{i}@x.cl'})
+        self.assertEqual(User.objects.count(), 10)
+        self.assertEqual(len(mail.outbox), 10)
+
+    def test_recuperar_contrasena_tambien_confirma(self):
+        u = self.registrar()
+        mail.outbox.clear()
+        self.client.post(reverse('recuperar_password'), {'email': 'juan@empresa.cl'})
+        enlace = self.enlace()
+        r = self.client.get(enlace, follow=True)
+        self.client.post(r.redirect_chain[-1][0], {'new_password1': 'Otra#Clave2026x', 'new_password2': 'Otra#Clave2026x'})
+        self.assertTrue(Perfil.objects.get(usuario=u).email_confirmado)
+
+    def test_cuentas_creadas_sin_registro_publico_entran_directo(self):
+        User.objects.create_superuser('raiz', 'raiz@x.cl', PASSWORD)  # como createsuperuser
+        self.assertRedirects(self.entrar('raiz'), reverse('dashboard'))
+
+
+# ---------------------------------------------------------------------------
+# Filtros de auditoría e historial de cuenta
+# ---------------------------------------------------------------------------
+class FiltrosAuditoriaTests(BaseRoles):
+    def setUp(self):
+        super().setUp()
+        RegistroAuditoria.objects.all().delete()
+        self.a = self.registro(datetime(2025, 3, 10, 9, 30), self.admin, 'CAMBIO_ROL', campo='Rol', valor_nuevo='Empleado')
+        self.b = self.registro(datetime(2026, 3, 10, 14, 0), self.empleado, 'EDICION_REGISTRO', campo='Marca', objeto='Vehículo 1')
+        self.c = self.registro(datetime(2026, 11, 5, 23, 30), None, 'LOGIN_FALLIDO', ip='10.0.0.9')
+        self.d = self.registro(datetime(2026, 11, 20, 2, 0), self.cliente, 'LOGIN')
+        self.entrar(self.admin)
+        RegistroAuditoria.objects.filter(pk__gt=self.d.pk).delete()  # el login de la prueba
+
+    def registro(self, momento, actor, accion, **extra):
+        r = RegistroAuditoria.objects.create(accion=accion, actor=actor, usuario_afectado=self.cliente,
+                                             usuario_afectado_texto='cliente1', **extra)
+        # A propósito con hora de Chile: es la que ve y filtra el usuario
+        RegistroAuditoria.objects.filter(pk=r.pk).update(fecha=timezone.make_aware(momento))
+        return r
+
+    def pks(self, **parametros):
+        RegistroAuditoria.objects.filter(pk__gt=self.d.pk).delete()
+        r = self.client.get(reverse('auditoria'), parametros)
+        self.assertEqual(r.status_code, 200)
+        return [x.pk for x in r.context['pagina']]
+
+    def test_por_defecto_mas_recientes_y_se_puede_invertir(self):
+        self.assertEqual(self.pks(), [self.d.pk, self.c.pk, self.b.pk, self.a.pk])
+        self.assertEqual(self.pks(orden='antiguos'), [self.a.pk, self.b.pk, self.c.pk, self.d.pk])
+
+    def test_por_anio_mes_y_dia(self):
+        self.assertEqual(self.pks(anio=2025), [self.a.pk])
+        self.assertEqual(self.pks(mes=3), [self.b.pk, self.a.pk])
+        self.assertEqual(self.pks(anio=2026, mes=11), [self.d.pk, self.c.pk])
+        self.assertEqual(self.pks(anio=2026, mes=11, dia=5), [self.c.pk])
+        self.assertEqual(self.pks(dia=10), [self.b.pk, self.a.pk])
+
+    def test_por_rango_horario_incluso_cruzando_medianoche(self):
+        self.assertEqual(self.pks(hora_desde='09:00', hora_hasta='14:00'), [self.b.pk, self.a.pk])
+        self.assertEqual(self.pks(hora_desde='22:00', hora_hasta='03:00'), [self.d.pk, self.c.pk])
+        self.assertEqual(self.pks(anio=2026, hora_desde='13:00', hora_hasta='15:00'), [self.b.pk])
+
+    def test_por_rol_y_campos(self):
+        self.assertEqual(self.pks(rol='admin'), [self.a.pk])
+        self.assertEqual(self.pks(rol='empleado'), [self.b.pk])
+        self.assertEqual(self.pks(rol='cliente'), [self.d.pk])
+        self.assertEqual(self.pks(rol='sistema'), [self.c.pk])
+        self.assertEqual(self.pks(accion='CAMBIO_ROL'), [self.a.pk])
+        self.assertEqual(self.pks(campo='Marca'), [self.b.pk])
+        self.assertEqual(self.pks(cuenta='Vehículo'), [self.b.pk])
+        self.assertEqual(self.pks(valor='Empleado'), [self.a.pk])
+        self.assertEqual(self.pks(ip='10.0.0'), [self.c.pk])
+        self.assertEqual(self.pks(actor='empleado1'), [self.b.pk])
+
+    def test_valores_invalidos_no_rompen_la_pagina(self):
+        self.assertEqual(len(self.pks(anio='abc', mes='99', dia='-1', hora_desde='xx', orden='raro')), 4)
+
+    def test_historial_de_cuenta_filtra_y_ordena(self):
+        url = reverse('gestion_editar_usuario', args=[self.cliente.pk])
+        r = self.client.get(url, {'anio': 2026, 'mes': 11, 'orden': 'antiguos'})
+        self.assertEqual([x.pk for x in r.context['pagina']], [self.c.pk, self.d.pk])

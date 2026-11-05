@@ -136,12 +136,21 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '3600'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
-# Correo. Por defecto se usa el backend de CONSOLA: los correos (ej. el de
-# recuperar contraseña) se imprimen en la terminal donde corre runserver y
-# no salen del computador. Para enviar correos reales habría que configurar
-# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend + EMAIL_HOST, etc.
+# Correo. Por defecto se usa el backend de CONSOLA: los correos (confirmación
+# de cuenta, recuperar contraseña) se imprimen en la terminal donde corre
+# runserver y no salen del computador. Para enviarlos de verdad se cambia
+# EMAIL_BACKEND por el de SMTP en el .env (ver .env.example).
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'usuarios.correo_consola.EmailBackend')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'RODAMAR <no-responder@rodamar.local>')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))  # segundos: si el servidor no responde, no se cuelga la página
+
+# El enlace para confirmar el correo de una cuenta nueva vence en 24 horas
+CONFIRMACION_CORREO_HORAS = 24
 
 # El enlace para restablecer la contraseña vence en 1 hora (por defecto Django usa 3 días)
 PASSWORD_RESET_TIMEOUT = 60 * 60

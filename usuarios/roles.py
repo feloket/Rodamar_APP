@@ -3,9 +3,9 @@ Roles del sistema RODAMAR y helpers para consultarlos.
 
     ADMIN    -> User.is_superuser = True (y is_staff para entrar a /admin/).
                 Acceso total: crea/edita/elimina cuentas de cualquier rol.
-    EMPLEADO -> Pertenece al grupo "Empleados". Opera el panel logístico,
-                crea cuentas de CLIENTE y registra/edita empresas cliente.
-                NO puede eliminar cuentas ni crear empleados/admins.
+    EMPLEADO -> Pertenece al grupo "Empleados". Opera el panel logístico y
+                registra/edita empresas, buques, camiones y vehículos.
+                NO tiene ningún acceso a la gestión de cuentas de otros usuarios.
     CLIENTE  -> Pertenece al grupo "Clientes". Se registra solo, ve los
                 vehículos de su empresa y edita SUS datos personales.
                 No puede ingresar datos operativos (buques, vehículos, etc.).
@@ -73,22 +73,12 @@ def es_personal(user):
 
 def roles_que_puede_crear(user):
     """Qué roles puede asignar este usuario al crear/editar una cuenta."""
-    rol = obtener_rol(user)
-    if rol == ADMIN:
-        return [ADMIN, EMPLEADO, CLIENTE]
-    if rol == EMPLEADO:
-        return [CLIENTE]
-    return []
+    return [ADMIN, EMPLEADO, CLIENTE] if obtener_rol(user) == ADMIN else []
 
 
 def puede_gestionar(actor, objetivo):
     """¿Puede `actor` ver/editar la cuenta `objetivo` desde Gestión de usuarios?"""
-    rol_actor = obtener_rol(actor)
-    if rol_actor == ADMIN:
-        return True
-    if rol_actor == EMPLEADO:
-        return obtener_rol(objetivo) == CLIENTE
-    return False
+    return obtener_rol(actor) == ADMIN
 
 
 def puede_eliminar(actor, objetivo):
