@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import tempfile
 from dotenv import load_dotenv
 import pymysql
 
@@ -83,6 +84,13 @@ DATABASES = {
     }
 }
 
+# Bases en la nube: DB_SSL_CA recibe el certificado CA (texto PEM) y la conexión
+# se cifra verificando el servidor. En una base local se deja sin definir.
+if os.getenv('DB_SSL_CA'):
+    _ca = Path(tempfile.gettempdir()) / 'rodamar_db_ca.pem'
+    _ca.write_text(os.environ['DB_SSL_CA'].replace('\\n', '\n'), encoding='utf-8')
+    DATABASES['default']['OPTIONS']['ssl'] = {'ca': str(_ca)}
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -107,6 +115,8 @@ USE_TZ = True
 # Archivos estáticos
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+# Destino de collectstatic. Vercel lo ejecuta al desplegar y publica ahí los archivos.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -128,6 +138,13 @@ CSRF_COOKIE_SECURE = not DEBUG
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'same-origin'
 X_FRAME_OPTIONS = 'DENY'
+
+# Vercel define la variable VERCEL y atiende el HTTPS antes de llegar a Django,
+# así que hay que confiar en sus encabezados para saber el protocolo y la IP real.
+# Fuera de Vercel no se confía: cualquiera podría falsificarlos.
+EN_VERCEL = bool(os.getenv('VERCEL'))
+if EN_VERCEL:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Solo en producción (DEBUG=False): obliga HTTPS. Se pueden desactivar con
 # SECURE_SSL_REDIRECT=False en el .env si se prueba sin certificado.
